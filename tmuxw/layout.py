@@ -66,26 +66,28 @@ class Layout:
             raise KeyError(f"pane {pane!r} no está en el layout")
         return leaf
 
-    def compute(self, w: int, h: int) -> dict:
-        """pane -> Rect dentro de un área w×h (0,0 arriba-izquierda)."""
-        rects = {}
+    def node_rects(self, w: int, h: int):
+        """Genera (nodo, Rect) de todo el árbol dentro de un área w×h."""
 
         def walk(node, rect):
-            if isinstance(node, Leaf):
-                rects[node.pane] = rect
-                return
-            x, y, rw, rh = rect
-            if node.kind == "h":
-                left = max(MIN_W, min(rw - 1 - MIN_W, round((rw - 1) * node.ratio)))
-                walk(node.children[0], Rect(x, y, left, rh))
-                walk(node.children[1], Rect(x + left + 1, y, rw - left - 1, rh))
-            else:
-                top = max(MIN_H, min(rh - 1 - MIN_H, round((rh - 1) * node.ratio)))
-                walk(node.children[0], Rect(x, y, rw, top))
-                walk(node.children[1], Rect(x, y + top + 1, rw, rh - top - 1))
+            yield node, rect
+            if isinstance(node, Split):
+                x, y, rw, rh = rect
+                if node.kind == "h":
+                    left = max(MIN_W, min(rw - 1 - MIN_W, round((rw - 1) * node.ratio)))
+                    yield from walk(node.children[0], Rect(x, y, left, rh))
+                    yield from walk(node.children[1], Rect(x + left + 1, y, rw - left - 1, rh))
+                else:
+                    top = max(MIN_H, min(rh - 1 - MIN_H, round((rh - 1) * node.ratio)))
+                    yield from walk(node.children[0], Rect(x, y, rw, top))
+                    yield from walk(node.children[1], Rect(x, y + top + 1, rw, rh - top - 1))
 
-        walk(self.root, Rect(0, 0, max(w, MIN_W), max(h, MIN_H)))
-        return rects
+        yield from walk(self.root, Rect(0, 0, max(w, MIN_W), max(h, MIN_H)))
+
+    def compute(self, w: int, h: int) -> dict:
+        """pane -> Rect dentro de un área w×h (0,0 arriba-izquierda)."""
+        return {node.pane: rect for node, rect in self.node_rects(w, h)
+                if isinstance(node, Leaf)}
 
     def can_split(self, pane, kind, w, h) -> bool:
         rect = self.compute(w, h)[pane]
@@ -137,8 +139,6 @@ class Layout:
             parent = parent.parent
         if parent is None:
             return False
-        rects = self.compute(w, h)
-        total = (w if kind == "h" else h)
         # tamaño del eje del split padre
         span = self._node_span(parent, w, h, kind)
         if span <= 2:
@@ -151,24 +151,51 @@ class Layout:
         return True
 
     def _node_span(self, target, w, h, kind):
-        span = [None]
+        rect = self.node_rect(target, w, h)
+        if rect is None:
+            return w if kind == "h" else h
+        return rect.w if kind == "h" else rect.h
 
-        def walk(node, rect):
+    def node_rect(self, target, w: int, h: int):
+        """Rect de un nodo concreto (Leaf o Split), o None si no está en el árbol."""
+        for node, rect in self.node_rects(w, h):
             if node is target:
-                span[0] = rect.w if kind == "h" else rect.h
-            if isinstance(node, Split):
-                x, y, rw, rh = rect
-                if node.kind == "h":
-                    left = max(MIN_W, min(rw - 1 - MIN_W, round((rw - 1) * node.ratio)))
-                    walk(node.children[0], Rect(x, y, left, rh))
-                    walk(node.children[1], Rect(x + left + 1, y, rw - left - 1, rh))
-                else:
-                    top = max(MIN_H, min(rh - 1 - MIN_H, round((rh - 1) * node.ratio)))
-                    walk(node.children[0], Rect(x, y, rw, top))
-                    walk(node.children[1], Rect(x, y + top + 1, rw, rh - top - 1))
+                return rect
+        return None
 
-        walk(self.root, Rect(0, 0, w, h))
-        return span[0] or (w if kind == "h" else h)
+    # -------------------------------------------------------------- ratón
+    def split_at(self, x: int, y: int, w: int, h: int):
+        """Split cuyo divisor pasa por la celda (x, y), o None si no hay borde ahí."""
+        for node, rect in self.node_rects(w, h):
+            if not isinstance(node, Split):
+                continue
+            rx, ry, rw, rh = rect
+            if node.kind == "h":
+                left = max(MIN_W, min(rw - 1 - MIN_W, round((rw - 1) * node.ratio)))
+                if x == rx + left and ry <= y < ry + rh:
+                    return node
+            else:
+                top = max(MIN_H, min(rh - 1 - MIN_H, round((rh - 1) * node.ratio)))
+                if y == ry + top and rx <= x < rx + rw:
+                    return node
+        return None
+
+    def drag_divider(self, node, x: int, y: int, w: int, h: int) -> bool:
+        """Coloca el divisor del split `node` en la celda del ratón (x, y)."""
+        rect = self.node_rect(node, w, h)
+        if rect is None:
+            return False
+        if node.kind == "h":
+            if rect.w < 2 * MIN_W + 1:
+                return False
+            left = max(MIN_W, min(rect.w - 1 - MIN_W, x - rect.x))
+            node.ratio = left / (rect.w - 1)
+        else:
+            if rect.h < 2 * MIN_H + 1:
+                return False
+            top = max(MIN_H, min(rect.h - 1 - MIN_H, y - rect.y))
+            node.ratio = top / (rect.h - 1)
+        return True
 
     # ----------------------------------------------------------- direction
     def neighbor(self, pane, direction: str, w: int, h: int):

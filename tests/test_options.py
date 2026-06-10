@@ -20,7 +20,8 @@ def test_get_defaults():
     o = Options()
     assert o.get("prefix") == "C-b"
     assert o.get("history-limit") == 2000
-    assert o.get("mouse") is False
+    assert o.get("mouse") is True  # el ratón viene activado por defecto
+    assert o.get("repeat-time") == 500
 
 
 def test_get_unknown_raises_keyerror():

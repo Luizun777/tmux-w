@@ -600,7 +600,7 @@ def cmd_send_keys(server, client, args):
 
 
 # ------------------------------------------------------- opciones y teclas
-@command("set-option", "set")
+@command("set-option", "set", "setw", "set-window-option")
 def cmd_set_option(server, client, args):
     flags, values, pos = parse_args(args, flags="gu", valued="t")
     if not pos:
@@ -650,9 +650,13 @@ def cmd_bind_key(server, client, args):
     # solo se parsean flags ANTES de la tecla; el resto es el comando verbatim
     args = list(args)
     root = False
+    repeat = False
     while args and args[0].startswith("-") and len(args[0]) > 1:
         if args[0] == "-n":
             root = True
+            args.pop(0)
+        elif args[0] == "-r":
+            repeat = True
             args.pop(0)
         elif args[0] == "-T":
             if len(args) < 2:
@@ -665,29 +669,40 @@ def cmd_bind_key(server, client, args):
         else:
             raise CommandError(f"opción desconocida: {args[0]}")
     if len(args) < 2:
-        raise CommandError("uso: bind-key tecla comando [args]")
+        raise CommandError("uso: bind-key [-r] tecla comando [args]")
     try:
         ks = parse_keyspec(args[0])
     except ValueError as e:
         raise CommandError(str(e))
     table = server.root_bindings if root else server.bindings
     table[ks] = args[1:]
+    if not root:
+        if repeat:
+            server.repeat_bindings.add(ks)
+        else:
+            server.repeat_bindings.discard(ks)
     return None
 
 
 @command("unbind-key", "unbind")
 def cmd_unbind_key(server, client, args):
     flags, values, pos = parse_args(args, flags="an", valued="T")
-    table = server.root_bindings if ("n" in flags or values.get("T") == "root") else server.bindings
+    root = "n" in flags or values.get("T") == "root"
+    table = server.root_bindings if root else server.bindings
     if "a" in flags:
         table.clear()
+        if not root:
+            server.repeat_bindings.clear()
         return None
     if not pos:
         raise CommandError("uso: unbind-key tecla")
     try:
-        table.pop(parse_keyspec(pos[0]), None)
+        ks = parse_keyspec(pos[0])
     except ValueError as e:
         raise CommandError(str(e))
+    table.pop(ks, None)
+    if not root:
+        server.repeat_bindings.discard(ks)
     return None
 
 
@@ -695,9 +710,10 @@ def cmd_unbind_key(server, client, args):
 def cmd_list_keys(server, client, args):
     lines = []
     for ks in sorted(server.root_bindings):
-        lines.append(f"bind-key -T root   {ks:12s} {' '.join(server.root_bindings[ks])}")
+        lines.append(f"bind-key -T root      {ks:12s} {' '.join(server.root_bindings[ks])}")
     for ks in sorted(server.bindings):
-        lines.append(f"bind-key -T prefix {ks:12s} {' '.join(server.bindings[ks])}")
+        rep = "-r " if ks in server.repeat_bindings else "   "
+        lines.append(f"bind-key {rep}-T prefix {ks:12s} {' '.join(server.bindings[ks])}")
     text = "\n".join(lines)
     if client is not None and client.attached:
         st = client.state
@@ -861,3 +877,11 @@ DEFAULT_BINDINGS: dict[str, list[str]] = {
 }
 for _d in "0123456789":
     DEFAULT_BINDINGS[_d] = ["select-window", "-t", f":{_d}"]
+
+# Bindings repetibles (bind -r): tras ejecutarse, el prefijo sigue activo
+# durante repeat-time ms, como en tmux (mantener Ctrl+flecha redimensiona seguido).
+DEFAULT_REPEAT_BINDINGS: set[str] = {
+    "Up", "Down", "Left", "Right",
+    "C-Up", "C-Down", "C-Left", "C-Right",
+    "M-Up", "M-Down", "M-Left", "M-Right",
+}

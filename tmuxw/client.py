@@ -9,13 +9,14 @@ import time
 from ctypes import wintypes
 
 from . import paths
-from .keys import ConsoleKeyReader
+from .keys import ConsoleInputReader
 
 STD_INPUT_HANDLE = -10
 STD_OUTPUT_HANDLE = -11
 ENABLE_PROCESSED_INPUT = 0x0001
 ENABLE_LINE_INPUT = 0x0002
 ENABLE_ECHO_INPUT = 0x0004
+ENABLE_MOUSE_INPUT = 0x0010
 ENABLE_QUICK_EDIT = 0x0040
 ENABLE_EXTENDED_FLAGS = 0x0080
 ENABLE_VT_PROCESSING = 0x0004
@@ -60,7 +61,7 @@ class RawConsole:
         _k32.GetConsoleMode(self.hout, ctypes.byref(self.old_out))
         new_in = (self.old_in.value & ~(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT
                                         | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT))
-        new_in |= ENABLE_EXTENDED_FLAGS
+        new_in |= ENABLE_EXTENDED_FLAGS | ENABLE_MOUSE_INPUT
         _k32.SetConsoleMode(self.hin, new_in)
         _k32.SetConsoleMode(self.hout, self.old_out.value | ENABLE_VT_PROCESSING
                             | DISABLE_NEWLINE_AUTO_RETURN)
@@ -141,12 +142,15 @@ def run_attach(session: str | None, create: bool, command: str | None = None,
     exit_msg = [""]
 
     def input_loop():
-        reader = ConsoleKeyReader()
+        reader = ConsoleInputReader()
         try:
-            for ks in reader.read_keys():
+            for kind, data in reader.read_events():
                 if stop.is_set():
                     break
-                _send(sock, {"t": "key", "k": ks})
+                if kind == "key":
+                    _send(sock, {"t": "key", "k": data})
+                else:  # mouse
+                    _send(sock, {"t": "mouse", **data})
         except (OSError, ValueError):
             pass
 

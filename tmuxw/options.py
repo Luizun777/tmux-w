@@ -9,6 +9,7 @@ import re
 
 DEFAULTS = {
     "prefix": "C-b",
+    "prefix2": "",  # prefijo secundario opcional (vacío = desactivado)
     "default-shell": "powershell.exe",
     "base-index": 0,
     "history-limit": 2000,
@@ -20,14 +21,16 @@ DEFAULTS = {
     "status-right": '"#H" %H:%M %d-%b-%y',
     "display-time": 750,
     "display-panes-time": 1000,
+    "repeat-time": 500,
     "pane-border-style": "fg=default",
     "pane-active-border-style": "fg=green",
     "message-style": "bg=yellow,fg=black",
-    "mouse": False,
+    "mouse": True,
 }
 
 BOOL_OPTIONS = {"status", "mouse"}
-INT_OPTIONS = {"base-index", "history-limit", "status-interval", "display-time", "display-panes-time"}
+INT_OPTIONS = {"base-index", "history-limit", "status-interval", "display-time",
+               "display-panes-time", "repeat-time"}
 
 # Opciones con un conjunto cerrado de valores validos.
 _ENUM_OPTIONS = {"mode-keys": {"vi", "emacs"}}

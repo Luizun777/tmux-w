@@ -20,6 +20,9 @@ class ServerHandle:
         self.tmp = tmp
         env = dict(os.environ)
         env["LOCALAPPDATA"] = str(tmp)
+        # aísla también ~/.tmuxw.conf: que no cargue la config real del usuario
+        env["USERPROFILE"] = str(tmp)
+        env["HOME"] = str(tmp)
         self.proc = subprocess.Popen([PYTHON, "-m", "tmuxw", "server"],
                                      env=env, cwd=str(PROJECT))
         self.info_path = tmp / "tmuxw" / "server.json"
@@ -184,6 +187,27 @@ def test_persistence_across_detach(server):
     c = server.connect()
     assert c.attach("qa")["t"] == "attached"
     c.wait_frame(contains="[qa]")
+    c.send({"t": "detach"})
+    c.recv_until(lambda m: m["t"] == "detached")
+    c.close()
+
+
+def test_mouse_click_focuses_pane(server):
+    c = server.connect()
+    assert c.attach("qa")["t"] == "attached"
+    c.wait_frame()
+    # click en la esquina superior izquierda: selecciona el primer panel
+    c.send({"t": "mouse", "e": "down", "b": "left", "x": 2, "y": 2})
+    c.send({"t": "mouse", "e": "up", "b": "left", "x": 2, "y": 2})
+    deadline = time.time() + 10
+    out = ""
+    while time.time() < deadline:
+        out = server.control("list-panes -t qa")
+        if "(active)" in out.splitlines()[0]:
+            break
+        time.sleep(0.3)
+    else:
+        pytest.fail(f"el click no activó el primer panel:\n{out}")
     c.send({"t": "detach"})
     c.recv_until(lambda m: m["t"] == "detached")
     c.close()

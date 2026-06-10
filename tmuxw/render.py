@@ -257,6 +257,23 @@ def _border_char(x, y, covered, w, h) -> str:
     return "─"
 
 
+def status_window_ranges(session, w: int) -> list[tuple[int, int, int]]:
+    """Rangos [inicio, fin) en columnas de cada etiqueta de ventana de la
+    status line, como (inicio, fin, índice de ventana). Para clicks de ratón."""
+    left = expand_format(session.options.get("status-left"), session)
+    used = len(left)
+    ranges = []
+    for idx in sorted(session.windows):
+        win = session.windows[idx]
+        flag = "*" if idx == session.current_index else ("-" if idx == session.last_index else "")
+        chunk = f" {idx}:{win.name}{flag}"
+        if used + len(chunk) > w:
+            break
+        ranges.append((used, used + len(chunk), idx))
+        used += len(chunk)
+    return ranges
+
+
 def _status_line(session, client, state, w: int) -> str:
     opts = session.options
     msg_sgr = style_sgr(opts.get("message-style"))

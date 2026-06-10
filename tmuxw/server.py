@@ -8,13 +8,15 @@ import time
 import traceback
 
 from . import paths
-from .commands import (CommandError, DEFAULT_BINDINGS, execute_command, execute_line)
+from .commands import (CommandError, DEFAULT_BINDINGS, DEFAULT_REPEAT_BINDINGS,
+                       execute_command, execute_line)
 from .config import tokenize, load_config
 from .keys import keyspec_to_vt
+from .layout import Rect
 from .model import Session, Window, next_pane_id
 from .options import Options
 from .pane import Pane
-from .render import render_frame
+from .render import render_frame, status_window_ranges
 
 FRAME_INTERVAL = 1 / 30.0
 
@@ -24,6 +26,9 @@ class ClientState:
 
     def __init__(self):
         self.mode = "normal"  # normal|prefix|prompt|confirm|copy|choose|page|clock|displayp
+        self.prefix_repeat = False  # prefijo activo por un binding repetible (bind -r)
+        self.prefix_until = 0.0  # fin del estado de repetición
+        self.drag = None  # arrastre de borde: {"win": Window, "node": Split}
         self.copy = None
         self.prompt_prefix = ":"
         self.prompt_prefix_len = 1
@@ -46,6 +51,8 @@ class ClientState:
 
     def reset_overlays(self):
         self.mode = "normal"
+        self.prefix_repeat = False
+        self.drag = None
         self.copy = None
         self.chooser = None
         self.page_lines = None
@@ -87,6 +94,7 @@ class Server:
         self.clients: list[Client] = []
         self.options = Options()
         self.bindings = dict(DEFAULT_BINDINGS)
+        self.repeat_bindings: set[str] = set(DEFAULT_REPEAT_BINDINGS)
         self.root_bindings: dict[str, list[str]] = {}
         self.buffers: list[str] = []
         self.prompt_history: list[str] = []
@@ -296,25 +304,141 @@ class Server:
                     if i < len(ordered):
                         win.set_active(ordered[i])
             elif st.mode == "prefix":
+                repeating = st.prefix_repeat and time.time() <= st.prefix_until
+                was_repeat = st.prefix_repeat
                 st.mode = "normal"
-                prefix = session.options.get("prefix")
-                if ks == prefix and win is not None:
-                    win.active.write(keyspec_to_vt(ks))
-                elif ks in self.bindings:
-                    self._run(client, self.bindings[ks])
+                st.prefix_repeat = False
+                if was_repeat:
+                    # estado de repetición (bind -r): la tecla repetible se
+                    # re-ejecuta sin prefijo; cualquier otra vuelve al panel
+                    if repeating and ks in self.bindings and ks in self.repeat_bindings:
+                        self._run(client, self.bindings[ks])
+                        self._arm_repeat(client, session)
+                    else:
+                        self._normal_key(client, session, win, ks)
                 else:
-                    self._flash(client, f"tecla sin asignar: {ks}")
+                    prefixes = (session.options.get("prefix"), session.options.get("prefix2"))
+                    if ks in prefixes and win is not None:
+                        win.active.write(keyspec_to_vt(ks))
+                    elif ks in self.bindings:
+                        self._run(client, self.bindings[ks])
+                        if ks in self.repeat_bindings:
+                            self._arm_repeat(client, session)
+                    else:
+                        self._flash(client, f"tecla sin asignar: {ks}")
             else:  # normal
-                prefix = session.options.get("prefix")
-                if ks == prefix:
-                    st.mode = "prefix"
-                elif ks in self.root_bindings:
-                    self._run(client, self.root_bindings[ks])
-                elif win is not None:
-                    win.active.write(keyspec_to_vt(ks))
+                self._normal_key(client, session, win, ks)
         except CommandError as e:
             self._flash(client, str(e))
         self.dirty.set()
+
+    # --------------------------------------------------------------- ratón
+    def handle_mouse(self, client: Client, ev: dict) -> None:
+        """Click: foco de panel / ventana en status line. Arrastre de borde:
+        redimensionar. Rueda: scroll (copy-mode). Geometría igual que render_frame."""
+        st = client.state
+        session = self.sessions.get(client.session_name)
+        if session is None or not session.options.get("mouse"):
+            return
+        win = session.current
+        try:
+            x, y = int(ev.get("x", -1)), int(ev.get("y", -1))
+        except (TypeError, ValueError):
+            return
+        etype, btn = ev.get("e", ""), ev.get("b", "")
+        if win is None or x < 0 or y < 0:
+            return
+        w, h = client.width, client.height
+        status_on = bool(session.options.get("status"))
+        body_h = max(1, h - (1 if status_on else 0))
+
+        if st.mode == "copy" and st.copy is not None:
+            if etype == "wheel":
+                if btn == "wheel-up":
+                    st.copy.scroll(-3)
+                elif st.copy.scroll(3) and st.copy.anchor is None:
+                    st.copy = None  # al llegar abajo sin selección, salir
+                    st.mode = "normal"
+            return
+        if st.mode not in ("normal", "prefix"):
+            return
+        if etype == "down" and st.mode == "prefix":
+            st.mode = "normal"  # un click cancela el prefijo
+            st.prefix_repeat = False
+
+        if etype == "up":
+            st.drag = None
+            return
+        if etype == "drag":
+            drag = st.drag
+            if drag is not None and drag["win"] is win and btn == "left":
+                node = drag["node"]
+                if any(n is node for n, _ in win.layout.node_rects(w, body_h)):
+                    if win.layout.drag_divider(node, x, y, w, body_h):
+                        self.relayout(session)
+                else:
+                    st.drag = None
+            return
+
+        # status line: click selecciona la ventana, la rueda las rota
+        if status_on and y >= h - 1:
+            if etype == "down" and btn == "left":
+                for start, end, idx in status_window_ranges(session, w):
+                    if start <= x < end:
+                        session.select_window(idx)
+                        self.relayout(session)
+                        break
+            elif etype == "wheel":
+                session.cycle_window(1 if btn == "wheel-down" else -1)
+                self.relayout(session)
+            return
+
+        if win.zoomed and win.active in win.panes():
+            rects = {win.active: Rect(0, 0, w, body_h)}
+        else:
+            rects = win.layout.compute(w, body_h)
+        target = None
+        for pane, r in rects.items():
+            if r.x <= x < r.x + r.w and r.y <= y < r.y + r.h:
+                target = pane
+                break
+
+        if etype == "down":
+            st.drag = None
+            if target is not None:
+                win.set_active(target)
+                self.relayout(session)
+            elif btn == "left" and not win.zoomed:
+                node = win.layout.split_at(x, y, w, body_h)
+                if node is not None:
+                    st.drag = {"win": win, "node": node}
+                    if win.layout.drag_divider(node, x, y, w, body_h):
+                        self.relayout(session)
+        elif etype == "wheel" and btn == "wheel-up" and target is not None:
+            # rueda arriba sobre un panel: copy-mode con scroll (como tmux)
+            from .copymode import CopyMode
+            win.set_active(target)
+            st.copy = CopyMode(target, session.options.get("mode-keys"), scroll_up=3)
+            st.mode = "copy"
+            self.relayout(session)
+
+    def _normal_key(self, client: Client, session: Session, win, ks: str) -> None:
+        st = client.state
+        if ks == session.options.get("prefix") or ks == session.options.get("prefix2"):
+            st.mode = "prefix"
+        elif ks in self.root_bindings:
+            self._run(client, self.root_bindings[ks])
+        elif win is not None:
+            win.active.write(keyspec_to_vt(ks))
+
+    def _arm_repeat(self, client: Client, session: Session) -> None:
+        """Tras un binding repetible, deja el prefijo activo durante repeat-time."""
+        st = client.state
+        if st.mode != "normal":  # el comando abrió un prompt/overlay
+            return
+        st.mode = "prefix"
+        st.prefix_repeat = True
+        st.prefix_until = time.time() + session.options.get("repeat-time") / 1000.0
 
     def _run(self, client: Client, tokens: list[str]) -> None:
         try:
@@ -562,6 +686,9 @@ class Server:
                 return False
         elif t == "key":
             self.handle_key(client, msg.get("k", ""))
+        elif t == "mouse":
+            self.handle_mouse(client, msg)
+            self.dirty.set()
         elif t == "text":
             session = self.sessions.get(client.session_name)
             if session and session.current:

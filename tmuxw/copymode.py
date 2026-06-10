@@ -40,6 +40,11 @@ class CopyMode:
     def _move_view(self, delta: int) -> None:
         self.top = max(0, min(self.total - self.rows, self.top + delta))
 
+    def scroll(self, delta: int) -> bool:
+        """Desplaza la vista (rueda del ratón); True si quedó pegada al final."""
+        self._move_view(delta)
+        return self.top >= max(0, self.total - self.rows)
+
     def _move_cursor(self, dy: int, dx: int) -> None:
         if dx:
             self.cx = max(0, min(self.cols - 1, self.cx + dx))

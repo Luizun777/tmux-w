@@ -82,9 +82,9 @@ Prefijo: **`C-b`** (configurable con `set -g prefix`). `C-b C-b` envía `C-b` li
 | `C-b s` | Selector de sesiones (overlay) | `choose-session` |
 | `C-b o` | Siguiente panel | `select-pane -t :.+` |
 | `C-b ;` | Panel anterior (alternar) | `last-pane` |
-| `C-b ←↑→↓` | Moverse entre paneles | `select-pane -L/-U/-R/-D` |
-| `C-b C-←↑→↓` | Redimensionar panel (1 celda) | `resize-pane -L/-U/-R/-D` |
-| `C-b M-←↑→↓` | Redimensionar panel (5 celdas) | `resize-pane -L/-U/-R/-D 5` |
+| `C-b ←↑→↓` | Moverse entre paneles (repetible) | `select-pane -L/-U/-R/-D` |
+| `C-b C-←↑→↓` | Redimensionar panel (1 celda, repetible) | `resize-pane -L/-U/-R/-D` |
+| `C-b M-←↑→↓` | Redimensionar panel (5 celdas, repetible) | `resize-pane -L/-U/-R/-D 5` |
 | `C-b z` | Zoom/unzoom panel | `resize-pane -Z` |
 | `C-b Space` | Siguiente layout predefinido | `next-layout` |
 | `C-b {` / `C-b }` | Intercambiar panel con anterior/siguiente | `swap-pane -U` / `-D` |
@@ -98,7 +98,22 @@ Prefijo: **`C-b`** (configurable con `set -g prefix`). `C-b C-b` envía `C-b` li
 | `C-b t` | Reloj | `clock-mode` |
 | `C-b (` / `C-b )` | Sesión anterior / siguiente | `switch-client -p/-n` |
 
-Todos los atajos son redefinibles con `bind-key` / `unbind-key`.
+Todos los atajos son redefinibles con `bind-key` / `unbind-key`. Los atajos marcados
+*repetible* son `bind -r` (como tmux): tras ejecutarse, el prefijo sigue activo durante
+`repeat-time` ms, así que se puede mantener Ctrl pulsado e ir dando a las flechas para
+redimensionar de forma continua sin repetir `C-b`.
+
+### Ratón
+
+Con `mouse on` (el defecto en tmux-w):
+
+- **Click en un panel** lo convierte en el panel activo.
+- **Click en el nombre de una ventana** en la status line cambia a esa ventana; la
+  rueda sobre la status line rota entre ventanas.
+- **Arrastrar un borde** entre paneles (mantener click izquierdo y mover) lo
+  redimensiona en vivo.
+- **Rueda arriba** sobre un panel entra en copy-mode y hace scroll; al volver abajo
+  del todo con la rueda se sale de copy-mode.
 
 ## 5. Comandos (con alias, como tmux)
 
@@ -128,6 +143,8 @@ sintaxis de tmux.
 | Opción | Defecto | Descripción |
 |---|---|---|
 | `prefix` | `C-b` | Tecla prefijo |
+| `prefix2` | *(vacío)* | Prefijo secundario opcional |
+| `repeat-time` | `500` | ms que el prefijo sigue activo tras un binding `bind -r` |
 | `default-shell` | `powershell.exe` | Programa de los paneles nuevos (admite `pwsh.exe`, `cmd.exe`…) |
 | `base-index` | `0` | Primer índice de ventana |
 | `history-limit` | `2000` | Líneas de scrollback por panel |
@@ -142,7 +159,7 @@ sintaxis de tmux.
 | `pane-border-style` | `fg=default` | Color de bordes |
 | `pane-active-border-style` | `fg=green` | Color del borde del panel activo |
 | `message-style` | `bg=yellow,fg=black` | Estilo de mensajes/prompt |
-| `mouse` | `off` | (roadmap, ver §12) |
+| `mouse` | `on` | Click selecciona panel/ventana, arrastrar bordes redimensiona, rueda hace scroll (§4) |
 
 Estilos: `bg=color,fg=color,bold` con colores con nombre (`black…white`, `bright*`), `colour0-255` y `default`.
 
@@ -196,6 +213,7 @@ unbind '"'
 ## 10. Protocolo cliente⇄servidor (JSON-lines sobre TCP loopback)
 
 Cliente→servidor: `attach {session,w,h,create}` · `key {k:"C-b"|"a"|"Up"…}` · `text {s}` ·
+`mouse {e:"down"|"up"|"drag"|"wheel", b:"left"|"right"|"middle"|"wheel-up"|"wheel-down", x, y}` ·
 `resize {w,h}` · `cmd {s:"split-window -h"}` (modo control) · `detach`
 Servidor→cliente: `frame {d:"<ANSI completo>"}` · `msg {s}` · `detached` · `exit {msg}` · `error {msg}`
 
@@ -216,7 +234,7 @@ compuesto (paneles+bordes+status) al tamaño de cada cliente, con *synchronized 
 
 | Área | Estado |
 |---|---|
-| Mouse (click panel, arrastrar bordes, rueda→copy-mode) | Roadmap |
+| Mouse (click panel, arrastrar bordes, rueda→copy-mode) | **Implementado** (§4); pendiente: selección de texto con ratón en copy-mode |
 | Hooks, `if-shell`, `run-shell`, formatos `#{…}` completos | Roadmap (formatos: subconjunto `#X`) |
 | `link-window`, sesiones agrupadas, `move-pane` entre ventanas | Roadmap |
 | Plugins (tpm), `popup`, `menu` | Fuera de alcance v1 |

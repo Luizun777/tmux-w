@@ -329,3 +329,178 @@ class ConsoleKeyReader:
                 yield ks
             else:
                 yield ch  # carácter unicode tal cual (acentos, ñ, etc.)
+
+
+# ---------------------------------------------------------------------------
+# Lector de consola con ratón (ReadConsoleInputW): teclas + eventos de ratón
+# ---------------------------------------------------------------------------
+
+# Virtual-key codes de teclas con nombre (navegación y función).
+VK_KEYSPEC: dict[int, str] = {
+    0x21: "PgUp", 0x22: "PgDn", 0x23: "End", 0x24: "Home",
+    0x25: "Left", 0x26: "Up", 0x27: "Right", 0x28: "Down",
+    0x2D: "Ins", 0x2E: "Del",
+}
+VK_KEYSPEC.update({0x70 + i: f"F{i + 1}" for i in range(12)})
+
+# dwControlKeyState
+_RIGHT_ALT = 0x0001
+_LEFT_ALT = 0x0002
+_RIGHT_CTRL = 0x0004
+_LEFT_CTRL = 0x0008
+
+# Teclas que son solo modificadores (Shift, Ctrl, Alt, CapsLock, Win).
+_VK_MODIFIERS = {0x10, 0x11, 0x12, 0x14, 0x5B, 0x5C}
+
+
+def decode_key_event(key_down: bool, vk: int, ch: str, state: int) -> str | None:
+    """KEY_EVENT_RECORD -> keyspec, o None si el evento no produce tecla.
+
+    - Teclas con nombre por virtual-key (flechas, F1-F12...) con prefijos C-/M-.
+    - AltGr (Ctrl izq + Alt der) produce el carácter compuesto literal (@, €...).
+    - Alt+numpad entrega el carácter en el key-up de Alt.
+    """
+    if not key_down:
+        return ch if (vk == 0x12 and ch and ch != "\x00") else None
+    if vk in _VK_MODIFIERS:
+        return None
+    altgr = bool(state & _RIGHT_ALT) and bool(state & _LEFT_CTRL)
+    if altgr:
+        ctrl = bool(state & _RIGHT_CTRL)
+        alt = bool(state & _LEFT_ALT)
+    else:
+        ctrl = bool(state & (_RIGHT_CTRL | _LEFT_CTRL))
+        alt = bool(state & (_RIGHT_ALT | _LEFT_ALT))
+    if vk in VK_KEYSPEC:
+        return ("C-" if ctrl else "") + ("M-" if alt else "") + VK_KEYSPEC[vk]
+    if not ch or ch == "\x00":
+        if vk == 0x20:  # Ctrl-Space llega sin carácter
+            return ("C-" if ctrl else "") + ("M-" if alt else "") + "Space"
+        return None
+    if altgr and not ctrl and not alt:
+        return ch if ch.isprintable() else None
+    if ch == " " and ctrl:
+        return ("C-M-" if alt else "C-") + "Space"
+    ks = ctrl_char_to_keyspec(ch)
+    if ks is not None:
+        if alt:
+            return ("C-M-" + ks[2:]) if ks.startswith("C-") else ("M-" + ks)
+        return ks
+    if alt and ch.isprintable():
+        return "M-" + ch
+    return ch
+
+
+# dwEventFlags de MOUSE_EVENT_RECORD
+_MOUSE_MOVED = 0x0001
+_MOUSE_WHEELED = 0x0004
+_MOUSE_HWHEELED = 0x0008
+
+_BUTTON_NAMES = {0x1: "left", 0x2: "right", 0x4: "middle"}
+
+
+def _button_name(bits: int) -> str:
+    for bit, name in _BUTTON_NAMES.items():
+        if bits & bit:
+            return name
+    return "left"
+
+
+def decode_mouse_event(flags: int, buttons: int, x: int, y: int,
+                       prev_buttons: int) -> tuple[dict | None, int]:
+    """MOUSE_EVENT_RECORD -> (evento o None, nuevo estado de botones).
+
+    Eventos: {"e": "down"|"up"|"drag"|"wheel", "b": botón, "x", "y"}.
+    `prev_buttons` es el dwButtonState del evento anterior (para detectar
+    pulsación/liberación); el llamante guarda el valor devuelto.
+    """
+    if flags & _MOUSE_WHEELED:
+        delta = buttons >> 16 & 0xFFFF
+        up = delta < 0x8000  # delta con signo: positivo = rueda arriba
+        ev = {"e": "wheel", "b": "wheel-up" if up else "wheel-down", "x": x, "y": y}
+        return ev, prev_buttons
+    if flags & _MOUSE_HWHEELED:
+        return None, prev_buttons
+    held = buttons & 0x7
+    if flags & _MOUSE_MOVED:
+        if held:
+            return {"e": "drag", "b": _button_name(held), "x": x, "y": y}, held
+        return None, held
+    pressed = held & ~prev_buttons
+    released = prev_buttons & ~held
+    if pressed:
+        return {"e": "down", "b": _button_name(pressed), "x": x, "y": y}, held
+    if released:
+        return {"e": "up", "b": _button_name(released), "x": x, "y": y}, held
+    return None, held
+
+
+class ConsoleInputReader:
+    """Lee la consola con ReadConsoleInputW: teclas y ratón.
+
+    Genera tuplas ("key", keyspec) y ("mouse", evento). Requiere que el modo
+    de consola tenga ENABLE_MOUSE_INPUT (lo activa RawConsole en el cliente).
+    """
+
+    def __init__(self):
+        self._buttons = 0
+        self._last_drag: tuple[int, int] | None = None
+
+    def read_events(self):
+        import ctypes
+        from ctypes import wintypes
+
+        class _Coord(ctypes.Structure):
+            _fields_ = [("X", ctypes.c_short), ("Y", ctypes.c_short)]
+
+        class _KeyEvent(ctypes.Structure):
+            _fields_ = [("bKeyDown", wintypes.BOOL),
+                        ("wRepeatCount", wintypes.WORD),
+                        ("wVirtualKeyCode", wintypes.WORD),
+                        ("wVirtualScanCode", wintypes.WORD),
+                        ("UnicodeChar", wintypes.WCHAR),
+                        ("dwControlKeyState", wintypes.DWORD)]
+
+        class _MouseEvent(ctypes.Structure):
+            _fields_ = [("dwMousePosition", _Coord),
+                        ("dwButtonState", wintypes.DWORD),
+                        ("dwControlKeyState", wintypes.DWORD),
+                        ("dwEventFlags", wintypes.DWORD)]
+
+        class _Event(ctypes.Union):
+            _fields_ = [("KeyEvent", _KeyEvent), ("MouseEvent", _MouseEvent)]
+
+        class _InputRecord(ctypes.Structure):
+            _fields_ = [("EventType", wintypes.WORD), ("Event", _Event)]
+
+        k32 = ctypes.windll.kernel32
+        handle = k32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+        records = (_InputRecord * 32)()
+        count = wintypes.DWORD()
+        while True:
+            if not k32.ReadConsoleInputW(handle, records, 32, ctypes.byref(count)):
+                return
+            for i in range(count.value):
+                rec = records[i]
+                if rec.EventType == 0x0001:  # KEY_EVENT
+                    ke = rec.Event.KeyEvent
+                    ks = decode_key_event(bool(ke.bKeyDown), ke.wVirtualKeyCode,
+                                          ke.UnicodeChar, ke.dwControlKeyState)
+                    if ks is not None:
+                        for _ in range(max(1, ke.wRepeatCount)):
+                            yield ("key", ks)
+                elif rec.EventType == 0x0002:  # MOUSE_EVENT
+                    me = rec.Event.MouseEvent
+                    ev, self._buttons = decode_mouse_event(
+                        me.dwEventFlags, me.dwButtonState,
+                        me.dwMousePosition.X, me.dwMousePosition.Y, self._buttons)
+                    if ev is None:
+                        continue
+                    if ev["e"] == "drag":
+                        # un evento por celda, no por píxel
+                        if self._last_drag == (ev["x"], ev["y"]):
+                            continue
+                        self._last_drag = (ev["x"], ev["y"])
+                    else:
+                        self._last_drag = None
+                    yield ("mouse", ev)
