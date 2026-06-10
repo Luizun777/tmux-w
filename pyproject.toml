@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tmuxw"
+version = "0.1.0"
+description = "Clon de tmux para Windows (PowerShell) sobre ConPTY"
+requires-python = ">=3.10"
+dependencies = [
+    "pywinpty==2.0.13",
+    "pyte>=0.8.1",
+]
+
+[project.scripts]
+tmuxw = "tmuxw.cli:main"
+
+[tool.setuptools]
+packages = ["tmuxw"]
