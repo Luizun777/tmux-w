@@ -1,24 +1,52 @@
 # tmux-w
 
+[![Tests](https://github.com/luisacosta360/tmux-w/actions/workflows/tests.yml/badge.svg)](https://github.com/luisacosta360/tmux-w/actions/workflows/tests.yml)
+[![Lint](https://github.com/luisacosta360/tmux-w/actions/workflows/lint.yml/badge.svg)](https://github.com/luisacosta360/tmux-w/actions/workflows/lint.yml)
+[![Build](https://github.com/luisacosta360/tmux-w/actions/workflows/build.yml/badge.svg)](https://github.com/luisacosta360/tmux-w/actions/workflows/build.yml)
+
 Clon de **tmux** 100% nativo para **Windows**, usable desde PowerShell / Windows Terminal.
 Servidor persistente + sesiones + ventanas + paneles sobre **ConPTY** (la pseudoconsola de
 Windows), con emulación VT por panel ([pyte](https://github.com/selectel/pyte)) y render ANSI.
 
-> Especificación completa de funcionalidades, atajos, comandos y arquitectura: **[FUNCIONALIDADES.md](FUNCIONALIDADES.md)**
+> 📖 Especificación completa: **[FUNCIONALIDADES.md](FUNCIONALIDADES.md)**  
+> 👨‍💻 Desarrollo: **[DEVELOPMENT.md](DEVELOPMENT.md)**  
+> 🤝 Contribuir: **[CONTRIBUTING.md](CONTRIBUTING.md)**  
+> 🔧 Automatización: **[AUTOMATION_CHECKLIST.md](AUTOMATION_CHECKLIST.md)**
 
 ## Requisitos
 
 - Windows 10 1809+ (ConPTY). Recomendado Windows Terminal.
 - Python 3.10 – 3.12 (pywinpty no carga en 3.13/3.14 en algunas instalaciones).
 
-## Instalación
+## Quick Start
+
+### Installation (30 seconds)
 
 ```powershell
 cd tmux-w
+
+# Automated setup (recommended)
+& .\scripts\setup.ps1
+
+# or manual:
 py -3.12 -m venv .venv
 .venv\Scripts\pip install -e .
-# opcional: añade la carpeta al PATH para usar tmuxw.cmd desde cualquier sitio
 ```
+
+### Development (contribute code)
+
+```powershell
+# Full check: setup + lint + test
+& .\scripts\dev.ps1
+
+# Just run tests
+& .\scripts\test.ps1
+
+# Check code style
+& .\scripts\lint.ps1
+```
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for details.
 
 ## Uso rápido
 
