@@ -29,8 +29,14 @@ DEFAULTS = {
 }
 
 BOOL_OPTIONS = {"status", "mouse"}
-INT_OPTIONS = {"base-index", "history-limit", "status-interval", "display-time",
-               "display-panes-time", "repeat-time"}
+INT_OPTIONS = {
+    "base-index",
+    "history-limit",
+    "status-interval",
+    "display-time",
+    "display-panes-time",
+    "repeat-time",
+}
 
 # Opciones con un conjunto cerrado de valores validos.
 _ENUM_OPTIONS = {"mode-keys": {"vi", "emacs"}}
@@ -105,8 +111,7 @@ def _coerce(name, value):
             if lowered in _FALSE_STRINGS:
                 return False
         raise ValueError(
-            f"valor booleano invalido para {name!r}: {value!r} "
-            f"(se esperaba on/off/true/false/1/0)"
+            f"valor booleano invalido para {name!r}: {value!r} (se esperaba on/off/true/false/1/0)"
         )
     if name in INT_OPTIONS:
         if isinstance(value, bool):
@@ -117,9 +122,7 @@ def _coerce(name, value):
             try:
                 return int(value.strip())
             except ValueError:
-                raise ValueError(
-                    f"valor entero invalido para {name!r}: {value!r}"
-                ) from None
+                raise ValueError(f"valor entero invalido para {name!r}: {value!r}") from None
         raise ValueError(f"valor entero invalido para {name!r}: {value!r}")
     result = value if isinstance(value, str) else str(value)
     if name in _ENUM_OPTIONS and result not in _ENUM_OPTIONS[name]:
@@ -164,7 +167,7 @@ def _is_valid_color(value: str) -> bool:
         return True
     if value in _NAMED_COLORS:
         return True
-    if value.startswith("bright") and value[len("bright"):] in _NAMED_COLORS:
+    if value.startswith("bright") and value[len("bright") :] in _NAMED_COLORS:
         return True
     m = _COLOUR_RE.match(value)
     if m:
@@ -210,8 +213,8 @@ def _color_sgr(value: str, is_bg: bool) -> str:
         return "49" if is_bg else "39"
     if value in _NAMED_COLORS:
         return str((40 if is_bg else 30) + _NAMED_COLORS[value])
-    if value.startswith("bright") and value[len("bright"):] in _NAMED_COLORS:
-        return str((100 if is_bg else 90) + _NAMED_COLORS[value[len("bright"):]])
+    if value.startswith("bright") and value[len("bright") :] in _NAMED_COLORS:
+        return str((100 if is_bg else 90) + _NAMED_COLORS[value[len("bright") :]])
     m = _COLOUR_RE.match(value)
     if m and 0 <= int(m.group(1)) <= 255:
         return f"{'48' if is_bg else '38'};5;{int(m.group(1))}"

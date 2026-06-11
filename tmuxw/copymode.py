@@ -1,4 +1,5 @@
 """Copy-mode: navegación del scrollback con selección (window-copy.c de tmux)."""
+
 from .render import char_sgr
 
 
@@ -141,8 +142,11 @@ class CopyMode:
         return self._do_search(term, direction * sign)
 
     def _do_search(self, term: str, direction: int) -> bool:
-        rng = (range(self.abs_line + 1, self.total) if direction > 0
-               else range(self.abs_line - 1, -1, -1))
+        rng = (
+            range(self.abs_line + 1, self.total)
+            if direction > 0
+            else range(self.abs_line - 1, -1, -1)
+        )
         for idx in rng:
             col = self._line_text(idx).find(term)
             if col >= 0:

@@ -1,4 +1,5 @@
 """Composición del frame ANSI: paneles + bordes + status line (screen-redraw.c de tmux)."""
+
 import socket
 import time
 
@@ -6,10 +7,24 @@ from .layout import Rect
 from .options import parse_style, style_to_sgr
 
 NAMED_FG = {
-    "black": 30, "red": 31, "green": 32, "brown": 33, "yellow": 33, "blue": 34,
-    "magenta": 35, "cyan": 36, "white": 37, "default": 39,
-    "brightblack": 90, "brightred": 91, "brightgreen": 92, "brightyellow": 93,
-    "brightblue": 94, "brightmagenta": 95, "brightcyan": 96, "brightwhite": 97,
+    "black": 30,
+    "red": 31,
+    "green": 32,
+    "brown": 33,
+    "yellow": 33,
+    "blue": 34,
+    "magenta": 35,
+    "cyan": 36,
+    "white": 37,
+    "default": 39,
+    "brightblack": 90,
+    "brightred": 91,
+    "brightgreen": 92,
+    "brightyellow": 93,
+    "brightblue": 94,
+    "brightmagenta": 95,
+    "brightcyan": 96,
+    "brightwhite": 97,
 }
 
 HOSTNAME = socket.gethostname().lower()
@@ -160,7 +175,11 @@ def render_frame(session, client, state) -> str:
                 continue
             _blit_pane(grid, rect, pane)
             # Render mouse text selection if active
-            if state.mode == "mouse_select" and pane is state.mouse_drag_pane and state.mouse_selection:
+            if (
+                state.mode == "mouse_select"
+                and pane is state.mouse_drag_pane
+                and state.mouse_selection
+            ):
                 _blit_mouse_selection(grid, rect, state.mouse_selection)
             if pane is window.active and cursor is None:
                 with pane.lock:
@@ -179,12 +198,15 @@ def render_frame(session, client, state) -> str:
                     continue
                 ch = _border_char(xx, yy, covered, w, body_h)
                 near_active = ar is not None and (
-                    ar.x - 1 <= xx <= ar.x + ar.w and ar.y - 1 <= yy <= ar.y + ar.h)
+                    ar.x - 1 <= xx <= ar.x + ar.w and ar.y - 1 <= yy <= ar.y + ar.h
+                )
                 grid.put(xx, yy, ch, active_sgr if near_active else border_sgr)
 
         # --- overlay display-panes
         if state.display_panes_until and time.time() < state.display_panes_until:
-            for i, (pane, rect) in enumerate(sorted(rects.items(), key=lambda kv: (kv[1].y, kv[1].x))):
+            for i, (pane, rect) in enumerate(
+                sorted(rects.items(), key=lambda kv: (kv[1].y, kv[1].x))
+            ):
                 _blit_big_text(grid, rect, str(i), "1;34")
 
     # --- overlays de ventana completa
@@ -228,13 +250,13 @@ def _blit_pane(grid: Grid, rect, pane) -> None:
                 grid.put(rect.x + rx, rect.y + ry, ch.data, char_sgr(ch))
     if pane.dead:
         msg = "[panel terminado, pulsa q o Enter]"
-        grid.put_text(rect.x, rect.y + rect.h - 1, msg[:rect.w], "7")
+        grid.put_text(rect.x, rect.y + rect.h - 1, msg[: rect.w], "7")
 
 
 def _blit_copy_mode(grid: Grid, rect, copy) -> None:
     rows = copy.visible_rows(rect.w, rect.h)
     for ry, row in enumerate(rows):
-        for rx, (ch, sgr) in enumerate(row[:rect.w]):
+        for rx, (ch, sgr) in enumerate(row[: rect.w]):
             grid.put(rect.x + rx, rect.y + ry, ch, sgr)
     ind = copy.indicator()
     grid.put_text(max(rect.x, rect.x + rect.w - len(ind)), rect.y, ind, "7;33")
@@ -246,15 +268,15 @@ def _border_char(x, y, covered, w, h) -> str:
             return False
         return (xx, yy) not in covered
 
-    l, r = is_b(x - 1, y), is_b(x + 1, y)
+    lf, r = is_b(x - 1, y), is_b(x + 1, y)
     u, d = is_b(x, y - 1), is_b(x, y + 1)
-    if l and r and u and d:
+    if lf and r and u and d:
         return "┼"
-    if l and r and u:
+    if lf and r and u:
         return "┴"
-    if l and r and d:
+    if lf and r and d:
         return "┬"
-    if u and d and l:
+    if u and d and lf:
         return "┤"
     if u and d and r:
         return "├"
@@ -316,7 +338,7 @@ def _status_line(session, client, state, w: int) -> str:
         else:
             out.append(chunk)
         used += len(chunk)
-    right = right[:max(0, w - used)]
+    right = right[: max(0, w - used)]
     pad = max(0, w - used - len(right))
     out.append(" " * pad)
     out.append(right)
@@ -326,14 +348,14 @@ def _status_line(session, client, state, w: int) -> str:
 
 # ------------------------------------------------------------------- overlays
 def _blit_page(grid: Grid, state) -> None:
-    lines = state.page_lines[state.page_offset:state.page_offset + grid.h - 1]
+    lines = state.page_lines[state.page_offset : state.page_offset + grid.h - 1]
     for y in range(grid.h):
         for x in range(grid.w):
             grid.put(x, y, " ", "")
     for y, line in enumerate(lines):
-        grid.put_text(0, y, line[:grid.w], "")
+        grid.put_text(0, y, line[: grid.w], "")
     hint = f"[{state.page_offset + 1}-{state.page_offset + len(lines)}/{len(state.page_lines)}] q:salir ↑↓:mover"
-    grid.put_text(0, grid.h - 1, hint[:grid.w], "7")
+    grid.put_text(0, grid.h - 1, hint[: grid.w], "7")
 
 
 def _blit_chooser(grid: Grid, state) -> None:
@@ -345,15 +367,20 @@ def _blit_chooser(grid: Grid, state) -> None:
         if i + 2 >= grid.h:
             break
         sgr = "7" if i == state.chooser_idx else ""
-        grid.put_text(2, i + 2, f"({i}) {label}"[:grid.w - 2], sgr)
+        grid.put_text(2, i + 2, f"({i}) {label}"[: grid.w - 2], sgr)
 
 
 _DIGITS = {
-    "0": ["███", "█ █", "█ █", "█ █", "███"], "1": [" █ ", "██ ", " █ ", " █ ", "███"],
-    "2": ["███", "  █", "███", "█  ", "███"], "3": ["███", "  █", "███", "  █", "███"],
-    "4": ["█ █", "█ █", "███", "  █", "  █"], "5": ["███", "█  ", "███", "  █", "███"],
-    "6": ["███", "█  ", "███", "█ █", "███"], "7": ["███", "  █", "  █", "  █", "  █"],
-    "8": ["███", "█ █", "███", "█ █", "███"], "9": ["███", "█ █", "███", "  █", "███"],
+    "0": ["███", "█ █", "█ █", "█ █", "███"],
+    "1": [" █ ", "██ ", " █ ", " █ ", "███"],
+    "2": ["███", "  █", "███", "█  ", "███"],
+    "3": ["███", "  █", "███", "  █", "███"],
+    "4": ["█ █", "█ █", "███", "  █", "  █"],
+    "5": ["███", "█  ", "███", "  █", "███"],
+    "6": ["███", "█  ", "███", "█ █", "███"],
+    "7": ["███", "  █", "  █", "  █", "  █"],
+    "8": ["███", "█ █", "███", "█ █", "███"],
+    "9": ["███", "█ █", "███", "  █", "███"],
     ":": [" ", "█", " ", "█", " "],
 }
 
@@ -408,4 +435,4 @@ def _blit_context_menu(grid: Grid, state) -> None:
     grid.put_text(menu_x + 1, menu_y, title, "1;33")
     for i, opt in enumerate(options):
         sgr = "7" if i == menu["selected"] else ""
-        grid.put_text(menu_x + 2, menu_y + i + 2, opt[:menu_width - 2], sgr)
+        grid.put_text(menu_x + 2, menu_y + i + 2, opt[: menu_width - 2], sgr)

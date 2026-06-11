@@ -1,5 +1,6 @@
 """QA unitarias: soporte de ratón (click, arrastre de bordes, rueda) y
 bindings repetibles (bind -r / repeat-time)."""
+
 import time
 
 import pytest
@@ -174,6 +175,7 @@ def test_click_ignored_when_mouse_off(server, client):
 # ------------------------------------------------ click: status line
 def test_status_click_selects_window(server, client):
     from tmuxw.render import status_window_ranges
+
     execute_line(server, client, "new-window")
     session = server.sessions["main"]
     assert session.current_index == 1
@@ -297,6 +299,7 @@ def test_prefix2_acts_as_prefix(server, client):
 def test_setw_is_set_option_alias(server, client):
     execute_line(server, client, "setw -g pane-base-index 1")  # no debe fallar
     from tmuxw.commands import resolve
+
     assert resolve("setw") is resolve("set-option")
     assert resolve("set-window-option") is resolve("set-option")
 

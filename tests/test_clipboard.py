@@ -1,5 +1,4 @@
 """Tests para clipboard read/write."""
-import pytest
 
 from tmuxw.clipboard import get_clipboard_text, set_clipboard_text
 

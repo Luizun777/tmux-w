@@ -17,7 +17,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🚀 Release Automation" -ForegroundColor Cyan
+Write-Host "Release Automation" -ForegroundColor Cyan
 Write-Host ""
 
 # Read current version
@@ -25,7 +25,7 @@ $PyprojectPath = "pyproject.toml"
 $Content = Get-Content $PyprojectPath -Raw
 $CurrentMatch = $Content | Select-String 'version = "([^"]+)"'
 if (-not $CurrentMatch) {
-    Write-Host "❌ Could not find version in pyproject.toml" -ForegroundColor Red
+    Write-Host "ERROR: Could not find version in pyproject.toml" -ForegroundColor Red
     exit 1
 }
 
@@ -36,10 +36,10 @@ Write-Host "Current version: $CurrentVersion" -ForegroundColor Yellow
 if (-not $Version) {
     Write-Host ""
     Write-Host "Options:" -ForegroundColor Yellow
-    Write-Host "  1. major  (e.g., 0.1.0 → 1.0.0)"
-    Write-Host "  2. minor  (e.g., 0.1.0 → 0.2.0)"
-    Write-Host "  3. patch  (e.g., 0.1.0 → 0.1.1)"
-    Write-Host "  4. custom (enter version manually)"
+    Write-Host " 1. major  (e.g., 0.1.0 -> 1.0.0)"
+    Write-Host " 2. minor  (e.g., 0.1.0 -> 0.2.0)"
+    Write-Host " 3. patch  (e.g., 0.1.0 -> 0.1.1)"
+    Write-Host " 4. custom (enter version manually)"
     Write-Host ""
     $Choice = Read-Host "Enter choice (1-4)"
 
@@ -86,37 +86,37 @@ if ($Confirm -ne "y") {
 
 # Update version in pyproject.toml
 Write-Host ""
-Write-Host "📝 Updating version in pyproject.toml..." -ForegroundColor Cyan
+Write-Host "Updating version in pyproject.toml..." -ForegroundColor Cyan
 $NewContent = $Content -replace 'version = "[^"]+"', "version = `"$Version`""
 Set-Content $PyprojectPath $NewContent -Encoding UTF8
 
 # Stage and commit
-Write-Host "📦 Creating git commit..." -ForegroundColor Cyan
+Write-Host "Creating git commit..." -ForegroundColor Cyan
 git add pyproject.toml
 git commit -m "Bump version to $Version" 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Git commit failed" -ForegroundColor Red
+    Write-Host "ERROR: Git commit failed" -ForegroundColor Red
     exit 1
 }
 
 # Create annotated tag
-Write-Host "🏷️  Creating git tag..." -ForegroundColor Cyan
+Write-Host "Creating git tag..." -ForegroundColor Cyan
 $TagMsg = "Release $Version"
 git tag -a "v$Version" -m $TagMsg 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Git tag failed" -ForegroundColor Red
+    Write-Host "ERROR: Git tag failed" -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
-Write-Host "✅ Release prepared!" -ForegroundColor Green
+Write-Host "OK: Release prepared!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
-Write-Host "  1. Review changes:  git log --oneline -5"
-Write-Host "  2. Push to GitHub:  git push origin main && git push origin v$Version"
-Write-Host "  3. Workflow runs automatically:"
-Write-Host "     - Tests all platforms"
-Write-Host "     - Builds wheel + sdist"
-Write-Host "     - Creates GitHub Release"
+Write-Host " 1. Review changes:  git log --oneline -5"
+Write-Host " 2. Push to GitHub:  git push origin main && git push origin v$Version"
+Write-Host " 3. Workflow runs automatically:"
+Write-Host " - Tests all platforms"
+Write-Host " - Builds wheel + sdist"
+Write-Host " - Creates GitHub Release"
 Write-Host ""
-Write-Host "📖 See: .github/workflows/release.yml" -ForegroundColor Gray
+Write-Host "See: .github/workflows/release.yml" -ForegroundColor Gray

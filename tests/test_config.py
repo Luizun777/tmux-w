@@ -1,13 +1,11 @@
 """Tests para tmuxw.config: tokenize y load_config."""
 
-import pytest
-
 from tmuxw.config import load_config, tokenize
-
 
 # ---------------------------------------------------------------------------
 # tokenize
 # ---------------------------------------------------------------------------
+
 
 def test_tokenize_simple():
     assert tokenize("bind | split-window -h") == ["bind", "|", "split-window", "-h"]
@@ -15,7 +13,10 @@ def test_tokenize_simple():
 
 def test_tokenize_double_quotes_and_trailing_comment():
     assert tokenize('set -g status-right "#H %H:%M" # reloj') == [
-        "set", "-g", "status-right", "#H %H:%M",
+        "set",
+        "-g",
+        "status-right",
+        "#H %H:%M",
     ]
 
 
@@ -71,6 +72,7 @@ def test_tokenize_multiple_whitespace_and_tabs():
 # load_config
 # ---------------------------------------------------------------------------
 
+
 def test_load_config_missing_file(tmp_path):
     calls = []
     errors = load_config(tmp_path / "no-existe.conf", calls.append)
@@ -102,10 +104,7 @@ def test_load_config_executes_non_empty_lines(tmp_path):
 def test_load_config_accumulates_errors_with_line_numbers(tmp_path):
     conf = tmp_path / "t.conf"
     conf.write_text(
-        "good one\n"
-        "bad command\n"
-        "good two\n"
-        "bad again\n",
+        "good one\nbad command\ngood two\nbad again\n",
         encoding="utf-8",
     )
     seen = []
@@ -126,8 +125,7 @@ def test_load_config_accumulates_errors_with_line_numbers(tmp_path):
 def test_load_config_line_continuation(tmp_path):
     conf = tmp_path / "t.conf"
     conf.write_text(
-        "set -g status-right \\\n\"%H:%M\"\n"
-        "bind x kill-pane\n",
+        'set -g status-right \\\n"%H:%M"\nbind x kill-pane\n',
         encoding="utf-8",
     )
     calls = []

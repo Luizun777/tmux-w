@@ -1,4 +1,5 @@
 """Dobles de prueba: panel sin ConPTY, cliente sin socket."""
+
 import threading
 from collections import defaultdict
 from types import SimpleNamespace
@@ -7,10 +8,17 @@ from pyte.screens import Char
 
 
 def make_char(data=" ", fg="default", bg="default", **kw):
-    return Char(data, fg, bg,
-                kw.get("bold", False), kw.get("italics", False),
-                kw.get("underscore", False), kw.get("strikethrough", False),
-                kw.get("reverse", False), kw.get("blink", False))
+    return Char(
+        data,
+        fg,
+        bg,
+        kw.get("bold", False),
+        kw.get("italics", False),
+        kw.get("underscore", False),
+        kw.get("strikethrough", False),
+        kw.get("reverse", False),
+        kw.get("blink", False),
+    )
 
 
 def text_rows(lines, cols):
@@ -50,7 +58,9 @@ class FakePane:
                 buffer[y][x] = make_char(c)
         self.screen = SimpleNamespace(
             cursor=SimpleNamespace(x=0, y=min(len(visible), rows) - 1, hidden=False),
-            title="", buffer=buffer)
+            title="",
+            buffer=buffer,
+        )
 
     def write(self, data):
         self.written.append(data)
@@ -73,6 +83,7 @@ class FakeClient:
 
     def __init__(self, width=80, height=24):
         from tmuxw.server import ClientState
+
         self.id = 1
         self.width = width
         self.height = height
@@ -90,6 +101,7 @@ class FakeClient:
 def make_fake_server(monkeypatch=None):
     """Server real con create_pane stubeado a FakePane (sin ConPTY)."""
     from tmuxw.server import Server
+
     server = Server()
 
     def fake_create_pane(session, command=None):

@@ -1,4 +1,5 @@
 """QA unitarias: tmuxw/copymode.py."""
+
 from tmuxw.copymode import CopyMode
 
 from .fakes import FakePane
@@ -100,14 +101,14 @@ def test_select_reverse_charwise():
     # selección hacia atrás: el texto sale en orden normal, recortado por columnas
     cm = make_copy()
     cm.handle_key("Home")
-    cm.handle_key("Space")        # ancla en (29, 0)
+    cm.handle_key("Space")  # ancla en (29, 0)
     cm.handle_key("Up")
-    cm.handle_key("End")          # cursor en (28, fin)
+    cm.handle_key("End")  # cursor en (28, fin)
     action, text = cm.handle_key("Enter")
     assert action == "copy"
     lines = text.splitlines()
-    assert lines[0].endswith("8")   # cola de "linea 28" desde la columna del cursor
-    assert lines[1] == "l"          # cabeza de "linea 29" hasta el ancla
+    assert lines[0].endswith("8")  # cola de "linea 28" desde la columna del cursor
+    assert lines[1] == "l"  # cabeza de "linea 29" hasta el ancla
 
 
 def test_enter_without_selection_exits():

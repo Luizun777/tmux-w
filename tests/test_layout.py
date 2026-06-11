@@ -1,4 +1,5 @@
 """QA unitarias: tmuxw/layout.py."""
+
 import pytest
 
 from tmuxw.layout import Layout, Rect
@@ -7,8 +8,7 @@ W, H = 80, 23
 
 
 def cells(rect):
-    return {(x, y) for x in range(rect.x, rect.x + rect.w)
-            for y in range(rect.y, rect.y + rect.h)}
+    return {(x, y) for x in range(rect.x, rect.x + rect.w) for y in range(rect.y, rect.y + rect.h)}
 
 
 def assert_tessellates(layout, w=W, h=H):

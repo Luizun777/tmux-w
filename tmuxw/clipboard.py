@@ -1,4 +1,5 @@
 """Portapapeles de Windows vía ctypes (CF_UNICODETEXT)."""
+
 import ctypes
 from ctypes import wintypes
 

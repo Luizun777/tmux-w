@@ -1,8 +1,9 @@
 """Comandos tmux (cmd-*.c): despacho, alias, targets y bindings por defecto."""
+
 import time
 
-from .config import tokenize, load_config
-from .keys import parse_keyspec, keyspec_to_vt
+from .config import load_config, tokenize
+from .keys import keyspec_to_vt, parse_keyspec
 from .render import expand_format
 
 
@@ -18,7 +19,7 @@ def parse_args(tokens, flags: str = "", valued: str = ""):
     while i < len(tokens):
         t = tokens[i]
         if t == "--":
-            pos.extend(tokens[i + 1:])
+            pos.extend(tokens[i + 1 :])
             break
         if len(t) >= 2 and t[0] == "-" and t[1].isalpha():
             ch = t[1]
@@ -124,8 +125,11 @@ def resolve(name: str):
     matches = sorted(n for n in COMMANDS if n.startswith(name))
     if len(matches) == 1:
         return COMMANDS[matches[0]]
-    raise CommandError(f"comando desconocido: {name}" if not matches
-                       else f"comando ambiguo: {name} ({', '.join(matches)})")
+    raise CommandError(
+        f"comando desconocido: {name}"
+        if not matches
+        else f"comando ambiguo: {name} ({', '.join(matches)})"
+    )
 
 
 def execute_command(server, client, tokens):
@@ -326,7 +330,9 @@ def cmd_list_windows(server, client, args):
     for idx in sorted(session.windows):
         w = session.windows[idx]
         flag = "*" if idx == session.current_index else ("-" if idx == session.last_index else " ")
-        lines.append(f"{idx}: {w.name}{flag} ({len(w.panes())} panes) [{session.width}x{session.height}]")
+        lines.append(
+            f"{idx}: {w.name}{flag} ({len(w.panes())} panes) [{session.width}x{session.height}]"
+        )
     return "\n".join(lines) or "no hay ventanas"
 
 
@@ -509,11 +515,15 @@ def cmd_copy_mode(server, client, args):
     if client is None:
         raise CommandError("copy-mode requiere un cliente")
     from .copymode import CopyMode
+
     session, win = target_window(server, client, values)
     st = client.state
     if st.copy is None:
-        st.copy = CopyMode(win.active, session.options.get("mode-keys"),
-                           scroll_up=win.active.rows if "u" in flags else 0)
+        st.copy = CopyMode(
+            win.active,
+            session.options.get("mode-keys"),
+            scroll_up=win.active.rows if "u" in flags else 0,
+        )
         st.mode = "copy"
     return None
 
@@ -563,12 +573,12 @@ def cmd_capture_pane(server, client, args):
     pane = win.active
     rows = pane.snapshot_lines()  # historial + pantalla
     if "S" not in values:
-        rows = rows[-pane.rows:]  # solo la pantalla visible
+        rows = rows[-pane.rows :]  # solo la pantalla visible
     else:
         try:
             start = int(values["S"])
             if start < 0:  # -S -N = N líneas de historial extra
-                rows = rows[max(0, len(rows) - pane.rows + start):]
+                rows = rows[max(0, len(rows) - pane.rows + start) :]
         except ValueError:
             pass
     lines = ["".join(ch.data or " " for ch in row).rstrip() for row in rows]
@@ -807,8 +817,9 @@ def cmd_choose_window(server, client, args):
     entries = []
     for idx in sorted(session.windows):
         w = session.windows[idx]
-        entries.append((f"{idx}: {w.name} ({len(w.panes())} panes)",
-                        ["select-window", "-t", f":{idx}"]))
+        entries.append(
+            (f"{idx}: {w.name} ({len(w.panes())} panes)", ["select-window", "-t", f":{idx}"])
+        )
     _open_chooser(client, "Ventanas", entries)
     return None
 
@@ -817,8 +828,10 @@ def cmd_choose_window(server, client, args):
 def cmd_choose_session(server, client, args):
     if client is None:
         raise CommandError("choose-session requiere un cliente")
-    entries = [(f"{name}: {len(s.windows)} windows", ["switch-client", "-t", name])
-               for name, s in server.sessions.items()]
+    entries = [
+        (f"{name}: {len(s.windows)} windows", ["switch-client", "-t", name])
+        for name, s in server.sessions.items()
+    ]
     _open_chooser(client, "Sesiones", entries)
     return None
 
@@ -881,7 +894,16 @@ for _d in "0123456789":
 # Bindings repetibles (bind -r): tras ejecutarse, el prefijo sigue activo
 # durante repeat-time ms, como en tmux (mantener Ctrl+flecha redimensiona seguido).
 DEFAULT_REPEAT_BINDINGS: set[str] = {
-    "Up", "Down", "Left", "Right",
-    "C-Up", "C-Down", "C-Left", "C-Right",
-    "M-Up", "M-Down", "M-Left", "M-Right",
+    "Up",
+    "Down",
+    "Left",
+    "Right",
+    "C-Up",
+    "C-Down",
+    "C-Left",
+    "C-Right",
+    "M-Up",
+    "M-Down",
+    "M-Left",
+    "M-Right",
 }

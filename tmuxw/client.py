@@ -1,4 +1,5 @@
 """Cliente interactivo: consola Windows en modo raw + VT (client.c / tty.c de tmux)."""
+
 import ctypes
 import json
 import socket
@@ -30,22 +31,32 @@ class _Coord(ctypes.Structure):
 
 
 class _SmallRect(ctypes.Structure):
-    _fields_ = [("Left", ctypes.c_short), ("Top", ctypes.c_short),
-                ("Right", ctypes.c_short), ("Bottom", ctypes.c_short)]
+    _fields_ = [
+        ("Left", ctypes.c_short),
+        ("Top", ctypes.c_short),
+        ("Right", ctypes.c_short),
+        ("Bottom", ctypes.c_short),
+    ]
 
 
 class _ConsoleInfo(ctypes.Structure):
-    _fields_ = [("dwSize", _Coord), ("dwCursorPosition", _Coord),
-                ("wAttributes", wintypes.WORD), ("srWindow", _SmallRect),
-                ("dwMaximumWindowSize", _Coord)]
+    _fields_ = [
+        ("dwSize", _Coord),
+        ("dwCursorPosition", _Coord),
+        ("wAttributes", wintypes.WORD),
+        ("srWindow", _SmallRect),
+        ("dwMaximumWindowSize", _Coord),
+    ]
 
 
 def console_size() -> tuple[int, int]:
     h = _k32.GetStdHandle(STD_OUTPUT_HANDLE)
     info = _ConsoleInfo()
     if _k32.GetConsoleScreenBufferInfo(h, ctypes.byref(info)):
-        return (info.srWindow.Right - info.srWindow.Left + 1,
-                info.srWindow.Bottom - info.srWindow.Top + 1)
+        return (
+            info.srWindow.Right - info.srWindow.Left + 1,
+            info.srWindow.Bottom - info.srWindow.Top + 1,
+        )
     return 80, 24
 
 
@@ -59,12 +70,14 @@ class RawConsole:
         self.old_out = wintypes.DWORD()
         _k32.GetConsoleMode(self.hin, ctypes.byref(self.old_in))
         _k32.GetConsoleMode(self.hout, ctypes.byref(self.old_out))
-        new_in = (self.old_in.value & ~(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT
-                                        | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT))
+        new_in = self.old_in.value & ~(
+            ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT
+        )
         new_in |= ENABLE_EXTENDED_FLAGS | ENABLE_MOUSE_INPUT
         _k32.SetConsoleMode(self.hin, new_in)
-        _k32.SetConsoleMode(self.hout, self.old_out.value | ENABLE_VT_PROCESSING
-                            | DISABLE_NEWLINE_AUTO_RETURN)
+        _k32.SetConsoleMode(
+            self.hout, self.old_out.value | ENABLE_VT_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN
+        )
         sys.stdout.write("\x1b[?1049h\x1b[2J\x1b[H")
         sys.stdout.flush()
         return self
@@ -79,12 +92,20 @@ class RawConsole:
 # ----------------------------------------------------------------- conexión
 def spawn_server() -> None:
     paths.ensure_dirs()
-    flags = (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-             | subprocess.CREATE_NO_WINDOW)
+    flags = (
+        subprocess.DETACHED_PROCESS
+        | subprocess.CREATE_NEW_PROCESS_GROUP
+        | subprocess.CREATE_NO_WINDOW
+    )
     with open(paths.LOG_FILE, "a", encoding="utf-8") as log:
-        subprocess.Popen([sys.executable, "-m", "tmuxw", "server"],
-                         creationflags=flags, stdin=subprocess.DEVNULL,
-                         stdout=log, stderr=log, close_fds=True)
+        subprocess.Popen(
+            [sys.executable, "-m", "tmuxw", "server"],
+            creationflags=flags,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+            close_fds=True,
+        )
 
 
 def connect(autostart: bool = True, timeout: float = 6.0):
@@ -123,8 +144,9 @@ def _send(sock, obj) -> None:
 
 
 # ------------------------------------------------------------------ attach
-def run_attach(session: str | None, create: bool, command: str | None = None,
-               detach_others: bool = False) -> int:
+def run_attach(
+    session: str | None, create: bool, command: str | None = None, detach_others: bool = False
+) -> int:
     try:
         sock, token = connect(autostart=create)
     except RuntimeError as e:
@@ -135,8 +157,18 @@ def run_attach(session: str | None, create: bool, command: str | None = None,
         return 1
 
     w, h = console_size()
-    _send(sock, {"t": "attach", "token": token, "session": session,
-                 "w": w, "h": h, "create": create, "command": command})
+    _send(
+        sock,
+        {
+            "t": "attach",
+            "token": token,
+            "session": session,
+            "w": w,
+            "h": h,
+            "create": create,
+            "command": command,
+        },
+    )
 
     stop = threading.Event()
     exit_msg = [""]

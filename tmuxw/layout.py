@@ -4,6 +4,7 @@ kind 'h': los hijos quedan lado a lado (split-window -h).
 kind 'v': los hijos quedan uno encima del otro (split-window -v).
 Entre hermanos siempre hay 1 celda de borde.
 """
+
 from collections import namedtuple
 
 Rect = namedtuple("Rect", "x y w h")
@@ -86,8 +87,7 @@ class Layout:
 
     def compute(self, w: int, h: int) -> dict:
         """pane -> Rect dentro de un área w×h (0,0 arriba-izquierda)."""
-        return {node.pane: rect for node, rect in self.node_rects(w, h)
-                if isinstance(node, Leaf)}
+        return {node.pane: rect for node, rect in self.node_rects(w, h) if isinstance(node, Leaf)}
 
     def can_split(self, pane, kind, w, h) -> bool:
         rect = self.compute(w, h)[pane]
@@ -241,8 +241,9 @@ class Layout:
             self.root = Split("h", main, rest, ratio=0.6)
         else:  # tiled
             import math
+
             ncols = math.ceil(math.sqrt(len(panes)))
-            rows = [panes[i:i + ncols] for i in range(0, len(panes), ncols)]
+            rows = [panes[i : i + ncols] for i in range(0, len(panes), ncols)]
             row_nodes = [_balanced(r, "h") for r in rows]
             self.root = _balanced_nodes(row_nodes, "v")
         self.root.parent = None

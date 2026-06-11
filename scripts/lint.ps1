@@ -15,49 +15,38 @@ param(
     [switch]$Fix = $false
 )
 
-$ErrorActionPreference = "Stop"
-
-# Activate venv if not already
-$VenvScript = Join-Path ".venv" "Scripts\Activate.ps1"
-if (Test-Path $VenvScript) {
-    & $VenvScript
+# Use the venv python directly (no activation needed)
+$Python = Join-Path ".venv" "Scripts\python.exe"
+if (-not (Test-Path $Python)) {
+    Write-Host "ERROR: venv not found. Run .\scripts\setup.ps1 first." -ForegroundColor Red
+    exit 1
 }
 
-Write-Host "📋 Linting code..." -ForegroundColor Cyan
-
-# Install ruff if needed
-python -m pip install ruff -q 2>/dev/null
-
+Write-Host "Linting code..." -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Checking: tmuxw/" -ForegroundColor Yellow
-if ($Fix) {
-    ruff check --fix tmuxw 2>&1
-    ruff format tmuxw 2>&1
-} else {
-    ruff check tmuxw 2>&1
-    ruff format --check tmuxw 2>&1
-}
 
-Write-Host ""
-Write-Host "Checking: tests/" -ForegroundColor Yellow
-if ($Fix) {
-    ruff check --fix tests 2>&1
-    ruff format tests 2>&1
-} else {
-    ruff check tests 2>&1
-    ruff format --check tests 2>&1
-}
-
-if ($LASTEXITCODE -eq 0) {
-    Write-Host ""
-    Write-Host "✅ Linting passed!" -ForegroundColor Green
-} else {
+$Failed = $false
+foreach ($target in @("tmuxw", "tests")) {
+    Write-Host "Checking: $target/" -ForegroundColor Yellow
     if ($Fix) {
-        Write-Host ""
-        Write-Host "⚠️  Fixed some issues. Review and commit." -ForegroundColor Yellow
+        & $Python -m ruff check --fix $target
+        if ($LASTEXITCODE -ne 0) { $Failed = $true }
+        & $Python -m ruff format $target
+        if ($LASTEXITCODE -ne 0) { $Failed = $true }
     } else {
-        Write-Host ""
-        Write-Host "❌ Linting issues found. Run with -Fix to auto-fix." -ForegroundColor Red
-        exit 1
+        & $Python -m ruff check $target
+        if ($LASTEXITCODE -ne 0) { $Failed = $true }
+        & $Python -m ruff format --check $target
+        if ($LASTEXITCODE -ne 0) { $Failed = $true }
     }
+}
+
+Write-Host ""
+if (-not $Failed) {
+    Write-Host "OK: Linting passed!" -ForegroundColor Green
+} elseif ($Fix) {
+    Write-Host "WARNING: Fixed some issues. Review and commit." -ForegroundColor Yellow
+} else {
+    Write-Host "ERROR: Linting issues found. Run with -Fix to auto-fix." -ForegroundColor Red
+    exit 1
 }

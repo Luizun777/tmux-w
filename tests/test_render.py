@@ -1,4 +1,5 @@
 """QA unitarias: tmuxw/render.py."""
+
 import time
 
 from tmuxw.model import Session, Window
@@ -68,8 +69,8 @@ def test_render_frame_basic():
     assert frame.startswith("\x1b[?2026h")
     assert frame.endswith("\x1b[?2026l")
     assert "contenido-visible" in frame
-    assert "[s]" in frame          # status-left
-    assert "0:" in frame           # lista de ventanas
+    assert "[s]" in frame  # status-left
+    assert "0:" in frame  # lista de ventanas
 
 
 def test_render_frame_status_off():

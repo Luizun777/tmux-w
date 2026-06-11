@@ -1,4 +1,5 @@
 """Rutas de runtime de tmux-w (equivalente a /tmp/tmux-UID de tmux)."""
+
 import json
 import os
 from pathlib import Path

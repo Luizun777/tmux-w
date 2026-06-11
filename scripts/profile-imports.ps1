@@ -13,19 +13,18 @@
 
 $ErrorActionPreference = "Stop"
 
-# Activate venv if exists
-$VenvScript = Join-Path ".venv" "Scripts\Activate.ps1"
-if (Test-Path $VenvScript) {
-    & $VenvScript
+# Use the venv python directly (no activation needed)
+$Python = Join-Path ".venv" "Scripts\python.exe"
+if (-not (Test-Path $Python)) {
+    $Python = "python"
 }
 
-Write-Host "⏱️  Profiling Python import times..." -ForegroundColor Cyan
+Write-Host "Profiling Python import times..." -ForegroundColor Cyan
 Write-Host ""
 
-python << 'EOF'
-import sys
+$PyCode = @'
+import importlib
 import timeit
-import importlib.util
 
 modules_to_test = [
     "ctypes",
@@ -35,7 +34,7 @@ modules_to_test = [
     "json",
     "time",
     "subprocess",
-    "pywinpty",
+    "winpty",
     "pyte",
     "tmuxw.keys",
     "tmuxw.client",
@@ -63,29 +62,31 @@ for module in modules_to_test:
         avg_time = sum(times) / len(times)
         status = ""
         if avg_time > 50:
-            status = "⚠️  SLOW"
+            status = "SLOW"
             slow_modules.append((module, avg_time))
         elif avg_time > 10:
-            status = "⏱️  MEDIUM"
+            status = "MEDIUM"
 
         print(f"{module:<30} {avg_time:<15.2f} {status:<20}")
     except Exception as e:
         print(f"{module:<30} ERROR: {str(e)[:15]}")
 
 if slow_modules:
-    print("\n⚠️  Slow modules (>50ms) - candidates for lazy-loading:")
+    print("\nWARNING: Slow modules (>50ms) - candidates for lazy-loading:")
     for mod, time in sorted(slow_modules, key=lambda x: x[1], reverse=True):
-        print(f"   {mod}: {time:.2f}ms")
+        print(f" {mod}: {time:.2f}ms")
 else:
-    print("\n✅ No slow imports detected (all < 50ms)")
+    print("\nOK: No slow imports detected (all < 50ms)")
 
 # Total import time of tmuxw
 print("\nTotal tmuxw import time:")
 start = timeit.default_timer()
 import tmuxw
 end = timeit.default_timer()
-print(f"   tmuxw module: {(end - start) * 1000:.2f}ms")
-EOF
+print(f" tmuxw module: {(end - start) * 1000:.2f}ms")
+'@
+
+$PyCode | & $Python -
 
 Write-Host ""
-Write-Host "✅ Profile complete" -ForegroundColor Green
+Write-Host "OK: Profile complete" -ForegroundColor Green

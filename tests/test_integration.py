@@ -1,4 +1,5 @@
 """QA integración E2E: servidor real en subproceso + ConPTY real + cliente TCP falso."""
+
 import json
 import os
 import socket
@@ -23,8 +24,7 @@ class ServerHandle:
         # aísla también ~/.tmuxw.conf: que no cargue la config real del usuario
         env["USERPROFILE"] = str(tmp)
         env["HOME"] = str(tmp)
-        self.proc = subprocess.Popen([PYTHON, "-m", "tmuxw", "server"],
-                                     env=env, cwd=str(PROJECT))
+        self.proc = subprocess.Popen([PYTHON, "-m", "tmuxw", "server"], env=env, cwd=str(PROJECT))
         self.info_path = tmp / "tmuxw" / "server.json"
         deadline = time.time() + 15
         while time.time() < deadline:
@@ -111,12 +111,21 @@ class Conn:
 
     def wait_frame(self, contains=None, timeout=20):
         return self.recv_until(
-            lambda m: m["t"] == "frame" and (contains is None or contains in m["d"]),
-            timeout)
+            lambda m: m["t"] == "frame" and (contains is None or contains in m["d"]), timeout
+        )
 
     def attach(self, session, w=100, h=30, create=False, command="cmd.exe"):
-        self.send({"t": "attach", "token": self.token, "session": session,
-                   "w": w, "h": h, "create": create, "command": command})
+        self.send(
+            {
+                "t": "attach",
+                "token": self.token,
+                "session": session,
+                "w": w,
+                "h": h,
+                "create": create,
+                "command": command,
+            }
+        )
         return self.recv_until(lambda m: m["t"] in ("attached", "error"))
 
     def close(self):
@@ -175,7 +184,7 @@ def test_prefix_binding_splits(server):
             break
         time.sleep(0.5)
     else:
-        pytest.fail("C-b \" no creó el tercer panel")
+        pytest.fail('C-b " no creó el tercer panel')
     c.send({"t": "detach"})
     c.recv_until(lambda m: m["t"] == "detached")
     c.close()
@@ -252,8 +261,9 @@ def test_copy_mode_and_paste(server):
 def test_invalid_token_rejected(server):
     s = socket.create_connection(("127.0.0.1", server.info["port"]), timeout=10)
     c = Conn(s, "token-falso")
-    c.send({"t": "attach", "token": "token-falso", "session": "qa",
-            "w": 80, "h": 24, "create": False})
+    c.send(
+        {"t": "attach", "token": "token-falso", "session": "qa", "w": 80, "h": 24, "create": False}
+    )
     m = c.recv_until(lambda m: m["t"] == "error")
     assert "token" in m["msg"]
     c.close()

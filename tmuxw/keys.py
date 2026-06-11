@@ -337,9 +337,16 @@ class ConsoleKeyReader:
 
 # Virtual-key codes de teclas con nombre (navegación y función).
 VK_KEYSPEC: dict[int, str] = {
-    0x21: "PgUp", 0x22: "PgDn", 0x23: "End", 0x24: "Home",
-    0x25: "Left", 0x26: "Up", 0x27: "Right", 0x28: "Down",
-    0x2D: "Ins", 0x2E: "Del",
+    0x21: "PgUp",
+    0x22: "PgDn",
+    0x23: "End",
+    0x24: "Home",
+    0x25: "Left",
+    0x26: "Up",
+    0x27: "Right",
+    0x28: "Down",
+    0x2D: "Ins",
+    0x2E: "Del",
 }
 VK_KEYSPEC.update({0x70 + i: f"F{i + 1}" for i in range(12)})
 
@@ -410,8 +417,9 @@ def _button_name(bits: int) -> str:
     return "left"
 
 
-def decode_mouse_event(flags: int, buttons: int, x: int, y: int,
-                       prev_buttons: int) -> tuple[dict | None, int]:
+def decode_mouse_event(
+    flags: int, buttons: int, x: int, y: int, prev_buttons: int
+) -> tuple[dict | None, int]:
     """MOUSE_EVENT_RECORD -> (evento o None, nuevo estado de botones).
 
     Eventos: {"e": "down"|"up"|"drag"|"wheel", "b": botón, "x", "y"}.
@@ -458,18 +466,22 @@ class ConsoleInputReader:
             _fields_ = [("X", ctypes.c_short), ("Y", ctypes.c_short)]
 
         class _KeyEvent(ctypes.Structure):
-            _fields_ = [("bKeyDown", wintypes.BOOL),
-                        ("wRepeatCount", wintypes.WORD),
-                        ("wVirtualKeyCode", wintypes.WORD),
-                        ("wVirtualScanCode", wintypes.WORD),
-                        ("UnicodeChar", wintypes.WCHAR),
-                        ("dwControlKeyState", wintypes.DWORD)]
+            _fields_ = [
+                ("bKeyDown", wintypes.BOOL),
+                ("wRepeatCount", wintypes.WORD),
+                ("wVirtualKeyCode", wintypes.WORD),
+                ("wVirtualScanCode", wintypes.WORD),
+                ("UnicodeChar", wintypes.WCHAR),
+                ("dwControlKeyState", wintypes.DWORD),
+            ]
 
         class _MouseEvent(ctypes.Structure):
-            _fields_ = [("dwMousePosition", _Coord),
-                        ("dwButtonState", wintypes.DWORD),
-                        ("dwControlKeyState", wintypes.DWORD),
-                        ("dwEventFlags", wintypes.DWORD)]
+            _fields_ = [
+                ("dwMousePosition", _Coord),
+                ("dwButtonState", wintypes.DWORD),
+                ("dwControlKeyState", wintypes.DWORD),
+                ("dwEventFlags", wintypes.DWORD),
+            ]
 
         class _Event(ctypes.Union):
             _fields_ = [("KeyEvent", _KeyEvent), ("MouseEvent", _MouseEvent)]
@@ -488,16 +500,21 @@ class ConsoleInputReader:
                 rec = records[i]
                 if rec.EventType == 0x0001:  # KEY_EVENT
                     ke = rec.Event.KeyEvent
-                    ks = decode_key_event(bool(ke.bKeyDown), ke.wVirtualKeyCode,
-                                          ke.UnicodeChar, ke.dwControlKeyState)
+                    ks = decode_key_event(
+                        bool(ke.bKeyDown), ke.wVirtualKeyCode, ke.UnicodeChar, ke.dwControlKeyState
+                    )
                     if ks is not None:
                         for _ in range(max(1, ke.wRepeatCount)):
                             yield ("key", ks)
                 elif rec.EventType == 0x0002:  # MOUSE_EVENT
                     me = rec.Event.MouseEvent
                     ev, self._buttons = decode_mouse_event(
-                        me.dwEventFlags, me.dwButtonState,
-                        me.dwMousePosition.X, me.dwMousePosition.Y, self._buttons)
+                        me.dwEventFlags,
+                        me.dwButtonState,
+                        me.dwMousePosition.X,
+                        me.dwMousePosition.Y,
+                        self._buttons,
+                    )
                     if ev is None:
                         continue
                     if ev["e"] == "drag":

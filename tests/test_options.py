@@ -11,10 +11,10 @@ from tmuxw.options import (
     style_to_sgr,
 )
 
-
 # ---------------------------------------------------------------------------
 # Options: herencia
 # ---------------------------------------------------------------------------
+
 
 def test_get_defaults():
     o = Options()
@@ -72,14 +72,24 @@ def test_set_does_not_mutate_defaults():
 # Coercion bool
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("raw,expected", [
-    ("on", True), ("off", False),
-    ("ON", True), ("Off", False),
-    ("true", True), ("FALSE", False),
-    ("1", True), ("0", False),
-    (True, True), (False, False),
-    (1, True), (0, False),
-])
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("on", True),
+        ("off", False),
+        ("ON", True),
+        ("Off", False),
+        ("true", True),
+        ("FALSE", False),
+        ("1", True),
+        ("0", False),
+        (True, True),
+        (False, False),
+        (1, True),
+        (0, False),
+    ],
+)
 def test_bool_coercion(raw, expected):
     o = Options()
     o.set("mouse", raw)
@@ -96,6 +106,7 @@ def test_bool_invalid_raises(bad):
 # ---------------------------------------------------------------------------
 # Coercion int
 # ---------------------------------------------------------------------------
+
 
 def test_int_coercion():
     o = Options()
@@ -119,6 +130,7 @@ def test_int_invalid_raises(bad):
 # ---------------------------------------------------------------------------
 # mode-keys (enum) y opciones desconocidas
 # ---------------------------------------------------------------------------
+
 
 def test_mode_keys_valid():
     o = Options()
@@ -152,6 +164,7 @@ def test_other_known_option_coerced_to_str():
 # show()
 # ---------------------------------------------------------------------------
 
+
 def test_show_combines_chain_and_defaults():
     g = Options()
     s = Options(parent=g)
@@ -175,9 +188,12 @@ def test_show_plain_equals_defaults():
 # parse_style
 # ---------------------------------------------------------------------------
 
+
 def test_parse_style_basic():
     assert parse_style("bg=green,fg=black,bold") == {
-        "bg": "green", "fg": "black", "bold": True,
+        "bg": "green",
+        "fg": "black",
+        "bold": True,
     }
 
 
@@ -202,21 +218,28 @@ def test_parse_style_color_kinds():
 def test_parse_style_all_attributes():
     s = parse_style("bold,dim,underscore,italics,reverse,blink")
     assert s == {
-        "bold": True, "dim": True, "underscore": True,
-        "italics": True, "reverse": True, "blink": True,
+        "bold": True,
+        "dim": True,
+        "underscore": True,
+        "italics": True,
+        "reverse": True,
+        "blink": True,
     }
 
 
-@pytest.mark.parametrize("bad", [
-    "fg=verde",        # color desconocido
-    "fg=colour256",    # fuera de rango
-    "fg=colour300",
-    "fg=#12345",       # hex corto
-    "fg=#zzzzzz",      # hex invalido
-    "fg=brightorange", # bright de color inexistente
-    "blinking",        # atributo desconocido
-    "weight=bold",     # clave desconocida
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "fg=verde",  # color desconocido
+        "fg=colour256",  # fuera de rango
+        "fg=colour300",
+        "fg=#12345",  # hex corto
+        "fg=#zzzzzz",  # hex invalido
+        "fg=brightorange",  # bright de color inexistente
+        "blinking",  # atributo desconocido
+        "weight=bold",  # clave desconocida
+    ],
+)
 def test_parse_style_invalid_raises(bad):
     with pytest.raises(ValueError):
         parse_style(bad)
@@ -225,6 +248,7 @@ def test_parse_style_invalid_raises(bad):
 # ---------------------------------------------------------------------------
 # style_to_sgr
 # ---------------------------------------------------------------------------
+
 
 def test_sgr_named_colors():
     assert style_to_sgr({"fg": "black", "bg": "green"}) == "30;42"
@@ -238,8 +262,12 @@ def test_sgr_attribute_order_then_fg_then_bg():
 
 def test_sgr_all_attributes_order():
     style = {
-        "blink": True, "reverse": True, "bold": True,
-        "underscore": True, "italics": True, "dim": True,
+        "blink": True,
+        "reverse": True,
+        "bold": True,
+        "underscore": True,
+        "italics": True,
+        "dim": True,
     }
     assert style_to_sgr(style) == "1;2;3;4;5;7"
 
@@ -278,6 +306,7 @@ def test_sgr_roundtrip_with_parse_style():
 # ---------------------------------------------------------------------------
 # Consistencia de los conjuntos exportados
 # ---------------------------------------------------------------------------
+
 
 def test_option_sets_are_subset_of_defaults():
     assert BOOL_OPTIONS <= set(DEFAULTS)

@@ -1,4 +1,5 @@
 """Panel: una pseudoconsola ConPTY (pywinpty) + emulador de terminal (pyte)."""
+
 import os
 import shutil
 import subprocess
@@ -53,9 +54,18 @@ def _resolve_command(command: str | None, default_shell: str) -> tuple[str, str 
 class Pane:
     """Un proceso bajo ConPTY cuya salida alimenta una pantalla pyte con scrollback."""
 
-    def __init__(self, pane_id: int, cols: int, rows: int, command: str | None = None,
-                 default_shell: str = DEFAULT_SHELL, history: int = 2000,
-                 cwd: str | None = None, on_dirty=None, on_exit=None):
+    def __init__(
+        self,
+        pane_id: int,
+        cols: int,
+        rows: int,
+        command: str | None = None,
+        default_shell: str = DEFAULT_SHELL,
+        history: int = 2000,
+        cwd: str | None = None,
+        on_dirty=None,
+        on_exit=None,
+    ):
         self.id = pane_id
         self.cols = max(2, cols)
         self.rows = max(1, rows)
@@ -63,7 +73,9 @@ class Pane:
         self.on_dirty = on_dirty
         self.on_exit = on_exit
         self.lock = threading.RLock()
-        self.screen = pyte.HistoryScreen(self.cols, self.rows, history=max(history, self.rows), ratio=0.5)
+        self.screen = pyte.HistoryScreen(
+            self.cols, self.rows, history=max(history, self.rows), ratio=0.5
+        )
         self.stream = pyte.Stream(self.screen)
         self.pty = PTY(self.cols, self.rows)
         exe, cmdline = _resolve_command(command, default_shell)
@@ -72,8 +84,9 @@ class Pane:
         if not ok:
             raise RuntimeError(f"no se pudo lanzar {exe!r}")
         self.pid = self.pty.pid
-        self._reader = threading.Thread(target=self._read_loop, daemon=True,
-                                        name=f"pane-{pane_id}-reader")
+        self._reader = threading.Thread(
+            target=self._read_loop, daemon=True, name=f"pane-{pane_id}-reader"
+        )
         self._reader.start()
 
     # ------------------------------------------------------------------ io
@@ -126,8 +139,11 @@ class Pane:
         """Termina el árbol de procesos del panel."""
         self.dead = True
         try:
-            subprocess.run(["taskkill", "/PID", str(self.pid), "/T", "/F"],
-                           capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.run(
+                ["taskkill", "/PID", str(self.pid), "/T", "/F"],
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
         except Exception:
             pass
 

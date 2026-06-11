@@ -1,7 +1,8 @@
 """CLI de tmuxw: new / attach / ls / kill-server / server / comando arbitrario."""
+
 import sys
 
-from .commands import parse_args, CommandError
+from .commands import CommandError, parse_args
 
 
 def main(argv=None) -> int:
@@ -21,6 +22,7 @@ def main(argv=None) -> int:
 
     if cmd == "server":
         from . import server
+
         server.main()
         return 0
 
@@ -34,10 +36,12 @@ def main(argv=None) -> int:
             print(f"tmuxw: {e}", file=sys.stderr)
             return 1
         from .client import run_attach
+
         return run_attach(values.get("t"), create=False)
 
     if cmd in ("-V", "--version", "version"):
         from . import __version__
+
         print(f"tmuxw {__version__}")
         return 0
 
@@ -47,6 +51,7 @@ def main(argv=None) -> int:
 
     # cualquier otro comando va al servidor en modo control
     from .client import run_control
+
     line = " ".join(_quote(t) for t in args)
     return run_control(line, autostart=False)
 
@@ -60,25 +65,27 @@ def _new_session(rest: list[str]) -> int:
     command = " ".join(pos) or None
     if "d" in flags:
         from .client import run_control
+
         line = "new-session -d"
         if "A" in flags:
             line += " -A"
         if "s" in values:
             line += f' -s "{values["s"]}"'
         if "x" in values:
-            line += f' -x {values["x"]}'
+            line += f" -x {values['x']}"
         if "y" in values:
-            line += f' -y {values["y"]}'
+            line += f" -y {values['y']}"
         if command:
-            line += f' {command}'
+            line += f" {command}"
         return run_control(line, autostart=True)
     from .client import run_attach
+
     return run_attach(values.get("s"), create=True, command=command)
 
 
 def _quote(token: str) -> str:
     if not token or " " in token or '"' in token:
-        return '"' + token.replace('\\', '\\\\').replace('"', '\\"') + '"'
+        return '"' + token.replace("\\", "\\\\").replace('"', '\\"') + '"'
     return token
 
 

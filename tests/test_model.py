@@ -1,4 +1,5 @@
 """QA unitarias: tmuxw/model.py."""
+
 from tmuxw.model import Session, Window
 
 from .fakes import FakePane
@@ -40,9 +41,9 @@ def test_remove_current_goes_to_last():
 
 def test_remove_current_without_last_picks_lower():
     s = make_session(3)  # current=2, last=1
-    s.remove_window(1)   # borra la last
+    s.remove_window(1)  # borra la last
     assert s.current_index == 2
-    s.remove_window(2)   # borra la actual sin last
+    s.remove_window(2)  # borra la actual sin last
     assert s.current_index == 0
 
 

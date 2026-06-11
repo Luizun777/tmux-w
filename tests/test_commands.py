@@ -1,16 +1,22 @@
 """QA unitarias: tmuxw/commands.py contra el Server real con panes falsos."""
+
 import pytest
 
-from tmuxw.commands import (CommandError, execute_command, execute_line,
-                            parse_args, resolve, target_window)
+from tmuxw.commands import (
+    CommandError,
+    execute_command,
+    execute_line,
+    parse_args,
+    resolve,
+    target_window,
+)
 
-from .fakes import FakeClient, FakePane, make_fake_server
+from .fakes import FakeClient, make_fake_server
 
 
 # ----------------------------------------------------------------- parse_args
 def test_parse_args_basics():
-    flags, values, pos = parse_args(["-h", "-t", "demo", "cmd.exe"],
-                                    flags="hv", valued="t")
+    flags, values, pos = parse_args(["-h", "-t", "demo", "cmd.exe"], flags="hv", valued="t")
     assert flags == {"h"}
     assert values == {"t": "demo"}
     assert pos == ["cmd.exe"]
@@ -282,14 +288,12 @@ def test_display_message_p_expands(server):
 
 
 def test_capture_pane(server):
-    s = server.sessions["main"]
     out = run(server, "capture-pane -p -t main")
     assert "linea 00" in out
 
 
 def test_target_window_specs(server):
     run(server, "new-window -t main")
-    s = server.sessions["main"]
     _, win = target_window(server, None, {"t": "main:0"})
     assert win.index == 0
     _, win = target_window(server, None, {"t": ":1"})
@@ -301,8 +305,7 @@ def test_target_window_specs(server):
 
 
 def test_client_required_commands(server):
-    for line in ("copy-mode", "command-prompt", "clock-mode",
-                 "choose-window", "display-panes"):
+    for line in ("copy-mode", "command-prompt", "clock-mode", "choose-window", "display-panes"):
         with pytest.raises(CommandError):
             run(server, line)
 

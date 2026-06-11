@@ -1,4 +1,5 @@
 """Modelo: Session -> Window -> Pane (equivalente a session.c / window.c de tmux)."""
+
 import itertools
 import time
 
@@ -85,7 +86,7 @@ class Session:
                 self.last_index = None
             elif remaining:
                 lower = [i for i in remaining if i < index]
-                self.current_index = (lower[-1] if lower else remaining[0])
+                self.current_index = lower[-1] if lower else remaining[0]
             else:
                 self.current_index = None
 

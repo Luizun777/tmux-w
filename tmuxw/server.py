@@ -1,4 +1,5 @@
 """Servidor tmux-w (server.c): mantiene sesiones vivas y atiende clientes por TCP loopback."""
+
 import json
 import os
 import secrets
@@ -8,9 +9,14 @@ import time
 import traceback
 
 from . import paths
-from .commands import (CommandError, DEFAULT_BINDINGS, DEFAULT_REPEAT_BINDINGS,
-                       execute_command, execute_line)
-from .config import tokenize, load_config
+from .commands import (
+    DEFAULT_BINDINGS,
+    DEFAULT_REPEAT_BINDINGS,
+    CommandError,
+    execute_command,
+    execute_line,
+)
+from .config import load_config, tokenize
 from .keys import keyspec_to_vt
 from .layout import Rect
 from .model import Session, Window, next_pane_id
@@ -51,7 +57,9 @@ class ClientState:
         # Mouse selection (drag text, right-click menu)
         self.mouse_drag_start: tuple[int, int] | None = None  # (pane_x, pane_y)
         self.mouse_drag_pane = None  # Pane being dragged in
-        self.mouse_selection: tuple[tuple[int, int], tuple[int, int]] | None = None  # (start, end) in pane coords
+        self.mouse_selection: tuple[tuple[int, int], tuple[int, int]] | None = (
+            None  # (start, end) in pane coords
+        )
         self.context_menu = None  # {"pane": Pane, "x": x, "y": y, "options": [...], "selected": 0}
 
     def reset_overlays(self):
@@ -138,7 +146,9 @@ class Server:
 
     def create_pane(self, session: Session, command=None) -> Pane:
         return Pane(
-            next_pane_id(), session.width, max(1, session.height - 1),
+            next_pane_id(),
+            session.width,
+            max(1, session.height - 1),
             command=command,
             default_shell=session.options.get("default-shell"),
             history=session.options.get("history-limit"),
@@ -195,8 +205,11 @@ class Server:
                     idx = panes.index(pane)
                     win.layout.remove(pane)
                     remaining = win.panes()
-                    win.set_active(win.last_pane if win.last_pane in remaining
-                                   else remaining[min(idx, len(remaining) - 1)])
+                    win.set_active(
+                        win.last_pane
+                        if win.last_pane in remaining
+                        else remaining[min(idx, len(remaining) - 1)]
+                    )
                 else:
                     win.layout.remove(pane)
                 win.zoomed = False
@@ -237,8 +250,11 @@ class Server:
         client.alive = False
 
     def _resize_session(self, session: Session) -> None:
-        sizes = [(c.width, c.height) for c in self.clients
-                 if c.attached and c.alive and c.session_name == session.name]
+        sizes = [
+            (c.width, c.height)
+            for c in self.clients
+            if c.attached and c.alive and c.session_name == session.name
+        ]
         if sizes:
             session.resize(min(w for w, _ in sizes), min(h for _, h in sizes))
         self.relayout(session)
@@ -308,7 +324,9 @@ class Server:
                 if ks.isdigit() and win is not None:
                     body_h = session.height - (1 if session.options.get("status") else 0)
                     rects = win.layout.compute(session.width, body_h)
-                    ordered = [p for p, _ in sorted(rects.items(), key=lambda kv: (kv[1].y, kv[1].x))]
+                    ordered = [
+                        p for p, _ in sorted(rects.items(), key=lambda kv: (kv[1].y, kv[1].x))
+                    ]
                     i = int(ks)
                     if i < len(ordered):
                         win.set_active(ordered[i])
@@ -375,14 +393,40 @@ class Server:
                     st.copy = None  # al llegar abajo sin selección, salir
                     st.mode = "normal"
             return
-        if st.mode not in ("normal", "prefix"):
+        if st.mode not in ("normal", "prefix", "mouse_select"):
             return
         if etype == "down" and st.mode == "prefix":
             st.mode = "normal"  # un click cancela el prefijo
             st.prefix_repeat = False
 
+        if win.zoomed and win.active in win.panes():
+            rects = {win.active: Rect(0, 0, w, body_h)}
+        else:
+            rects = win.layout.compute(w, body_h)
+
         if etype == "up":
             st.drag = None
+            if st.mode == "mouse_select":
+                # fin de la selección de texto: copiar al portapapeles
+                if (
+                    st.mouse_drag_pane is not None
+                    and st.mouse_selection is not None
+                    and btn == "left"
+                ):
+                    selection_text = self._get_pane_selection_text(
+                        st.mouse_drag_pane, st.mouse_selection
+                    )
+                    if selection_text:
+                        from .clipboard import set_clipboard_text
+
+                        set_clipboard_text(selection_text)
+                        st.message = "[texto copiado]"
+                        st.message_until = time.time() + 0.5
+                st.mouse_drag_start = None
+                st.mouse_drag_pane = None
+                st.mouse_selection = None
+                st.mode = "normal"
+                self.dirty.set()
             return
         if etype == "drag":
             drag = st.drag
@@ -393,7 +437,20 @@ class Server:
                         self.relayout(session)
                 else:
                     st.drag = None
+            elif st.mode == "mouse_select" and st.mouse_drag_pane is not None and btn == "left":
+                pane_rect = rects.get(st.mouse_drag_pane)
+                if pane_rect and st.mouse_drag_start:
+                    start_x, start_y = st.mouse_drag_start
+                    st.mouse_selection = ((start_y, start_x), (y - pane_rect.y, x - pane_rect.x))
+                    self.dirty.set()
             return
+
+        # un nuevo click mientras quedaba selección pendiente la cancela
+        if etype == "down" and st.mode == "mouse_select":
+            st.mode = "normal"
+            st.mouse_drag_start = None
+            st.mouse_drag_pane = None
+            st.mouse_selection = None
 
         # status line: click selecciona la ventana, la rueda las rota
         if status_on and y >= h - 1:
@@ -408,10 +465,6 @@ class Server:
                 self.relayout(session)
             return
 
-        if win.zoomed and win.active in win.panes():
-            rects = {win.active: Rect(0, 0, w, body_h)}
-        else:
-            rects = win.layout.compute(w, body_h)
         target = None
         for pane, r in rects.items():
             if r.x <= x < r.x + r.w and r.y <= y < r.y + r.h:
@@ -431,7 +484,9 @@ class Server:
                     st.mode = "mouse_select"
                 elif btn == "right":
                     # Right-click context menu
-                    self._show_context_menu(client, target, x - rects[target].x, y - rects[target].y)
+                    self._show_context_menu(
+                        client, target, x - rects[target].x, y - rects[target].y
+                    )
                 self.relayout(session)
             elif btn == "left" and not win.zoomed:
                 node = win.layout.split_at(x, y, w, body_h)
@@ -439,34 +494,10 @@ class Server:
                     st.drag = {"win": win, "node": node}
                     if win.layout.drag_divider(node, x, y, w, body_h):
                         self.relayout(session)
-        elif etype == "drag":
-            # Handle text drag selection
-            if st.mouse_drag_pane is not None and btn == "left":
-                pane_rect = rects.get(st.mouse_drag_pane)
-                if pane_rect:
-                    pane_x = x - pane_rect.x
-                    pane_y = y - pane_rect.y
-                    if st.mouse_drag_start:
-                        start_x, start_y = st.mouse_drag_start
-                        st.mouse_selection = ((start_y, start_x), (pane_y, pane_x))
-        elif etype == "up":
-            st.drag = None
-            # Finish text drag selection - copy to clipboard
-            if st.mouse_drag_pane is not None and st.mouse_selection is not None and btn == "left":
-                selection_text = self._get_pane_selection_text(st.mouse_drag_pane, st.mouse_selection)
-                if selection_text:
-                    from .clipboard import set_clipboard_text
-                    set_clipboard_text(selection_text)
-                    st.message = "[texto copiado]"
-                    st.message_until = time.time() + 0.5
-            st.mouse_drag_start = None
-            st.mouse_drag_pane = None
-            st.mouse_selection = None
-            st.mode = "normal"
-            self.dirty.set()
         elif etype == "wheel" and btn == "wheel-up" and target is not None:
             # rueda arriba sobre un panel: copy-mode con scroll (como tmux)
             from .copymode import CopyMode
+
             win.set_active(target)
             st.copy = CopyMode(target, session.options.get("mode-keys"), scroll_up=3)
             st.mode = "copy"
@@ -476,6 +507,7 @@ class Server:
         """Show right-click context menu."""
         st = client.state
         from .clipboard import get_clipboard_text
+
         options = []
         if st.mouse_selection:
             options.append("copy")
@@ -515,11 +547,13 @@ class Server:
                     text = self._get_pane_selection_text(pane, st.mouse_selection)
                     if text:
                         from .clipboard import set_clipboard_text
+
                         set_clipboard_text(text)
                         st.message = "[texto copiado]"
                         st.message_until = time.time() + 0.5
             elif option == "paste":
                 from .clipboard import get_clipboard_text
+
                 text = get_clipboard_text()
                 if text:
                     pane.write(text)
@@ -563,6 +597,7 @@ class Server:
         elif ks == "C-M-v" and win is not None:
             # Paste from clipboard: Ctrl+Shift+V
             from .clipboard import get_clipboard_text
+
             text = get_clipboard_text()
             if text:
                 win.active.write(text)
@@ -608,15 +643,16 @@ class Server:
             if text.strip():
                 self.prompt_history.append(text)
             if template:
-                quoted = '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
+                quoted = '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
                 line = template.replace("%%", quoted)
                 self._run(client, tokenize(line))
             elif text.strip():
                 self._run(client, tokenize(text))
         elif ks == "BSpace":
             if st.prompt_cursor > 0:
-                st.prompt_buffer = (st.prompt_buffer[:st.prompt_cursor - 1]
-                                    + st.prompt_buffer[st.prompt_cursor:])
+                st.prompt_buffer = (
+                    st.prompt_buffer[: st.prompt_cursor - 1] + st.prompt_buffer[st.prompt_cursor :]
+                )
                 st.prompt_cursor -= 1
         elif ks == "Left":
             st.prompt_cursor = max(0, st.prompt_cursor - 1)
@@ -646,8 +682,9 @@ class Server:
             self._prompt_insert(st, ks)
 
     def _prompt_insert(self, st: ClientState, ch: str) -> None:
-        st.prompt_buffer = (st.prompt_buffer[:st.prompt_cursor] + ch
-                            + st.prompt_buffer[st.prompt_cursor:])
+        st.prompt_buffer = (
+            st.prompt_buffer[: st.prompt_cursor] + ch + st.prompt_buffer[st.prompt_cursor :]
+        )
         st.prompt_cursor += 1
 
     # --- copy-mode ------------------------------------------------------
@@ -667,6 +704,7 @@ class Server:
                 self.buffers.insert(0, payload)
                 try:
                     from .clipboard import set_clipboard_text
+
                     set_clipboard_text(payload)
                 except Exception:
                     pass
@@ -740,8 +778,12 @@ class Server:
                 except OSError:
                     break
                 client = Client(sock)
-                threading.Thread(target=self._client_loop, args=(client,),
-                                 daemon=True, name=f"client-{client.id}").start()
+                threading.Thread(
+                    target=self._client_loop,
+                    args=(client,),
+                    daemon=True,
+                    name=f"client-{client.id}",
+                ).start()
         finally:
             paths.clear_server_info()
 
@@ -803,16 +845,20 @@ class Server:
                         session = matches[0] if len(matches) == 1 else None
                     if session is None:
                         if msg.get("create"):
-                            session = self.create_session(name, client.width, client.height,
-                                                          msg.get("command"))
+                            session = self.create_session(
+                                name, client.width, client.height, msg.get("command")
+                            )
                         else:
                             client.send({"t": "error", "msg": f"sesión no encontrada: {name}"})
                             return False
                 else:
                     if msg.get("create"):
-                        session = self.create_session(self.next_session_name(),
-                                                      client.width, client.height,
-                                                      msg.get("command"))
+                        session = self.create_session(
+                            self.next_session_name(),
+                            client.width,
+                            client.height,
+                            msg.get("command"),
+                        )
                     elif self.sessions:
                         session = next(reversed(self.sessions.values()))
                     else:
@@ -859,8 +905,11 @@ class Server:
             self.dirty.clear()
             time.sleep(FRAME_INTERVAL)
             with self.lock:
-                targets = [(c, self.sessions.get(c.session_name)) for c in self.clients
-                           if c.attached and c.alive]
+                targets = [
+                    (c, self.sessions.get(c.session_name))
+                    for c in self.clients
+                    if c.attached and c.alive
+                ]
                 frames = []
                 for client, session in targets:
                     if session is None:

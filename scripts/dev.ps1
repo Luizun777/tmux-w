@@ -25,7 +25,7 @@ $ErrorActionPreference = "Stop"
 $StartTime = Get-Date
 
 function Show-Section {
-    param([string]$Title, [string]$Icon = "→")
+    param([string]$Title, [string]$Icon = "->")
     Write-Host ""
     Write-Host "$Icon $Title" -ForegroundColor Cyan
     Write-Host ""
@@ -43,66 +43,66 @@ if (Test-Path $VenvScript) {
     & $VenvScript
 }
 
-Write-Host "🚀 tmux-w Development" -ForegroundColor Cyan
-Write-Host "   Mode: $Mode" -ForegroundColor Gray
+Write-Host " tmux-w Development" -ForegroundColor Cyan
+Write-Host "Mode: $Mode" -ForegroundColor Gray
 
 switch ($Mode) {
     "full" {
         # Full: Setup + Lint + Test
-        Show-Section "1️⃣  SETUP" "1️⃣ "
+        Show-Section "[1]  SETUP" "[1] "
         & .\scripts\setup.ps1
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
-        Show-Section "2️⃣  LINT" "2️⃣ "
+        Show-Section "[2]  LINT" "[2] "
         & .\scripts\lint.ps1
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
-        Show-Section "3️⃣  TEST" "3️⃣ "
+        Show-Section "[3]  TEST" "[3] "
         & .\scripts\test.ps1
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
         $Duration = ((Get-Date) - $StartTime).TotalSeconds
-        Show-Result "✅ All checks passed! ($([int]$Duration)s)" "Green"
+        Show-Result "OK: All checks passed! ($([int]$Duration)s)" "Green"
     }
 
     "quick" {
-        Show-Section "🧪 QUICK TEST (no setup/lint)" "⚡"
+        Show-Section "QUICK TEST (no setup/lint)" ""
         & .\scripts\test.ps1
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
         $Duration = ((Get-Date) - $StartTime).TotalSeconds
-        Show-Result "✅ Tests passed! ($([int]$Duration)s)" "Green"
+        Show-Result "OK: Tests passed! ($([int]$Duration)s)" "Green"
     }
 
     "setup" {
-        Show-Section "🔧 SETUP" "🔧"
+        Show-Section "SETUP" ""
         & .\scripts\setup.ps1
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
-        Show-Result "✅ Setup complete!" "Green"
+        Show-Result "OK: Setup complete!" "Green"
     }
 
     "test" {
-        Show-Section "🧪 TEST" "🧪"
+        Show-Section "TEST" ""
         & .\scripts\test.ps1
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
         $Duration = ((Get-Date) - $StartTime).TotalSeconds
-        Show-Result "✅ Tests passed! ($([int]$Duration)s)" "Green"
+        Show-Result "OK: Tests passed! ($([int]$Duration)s)" "Green"
     }
 
     "lint" {
-        Show-Section "📋 LINT" "📋"
+        Show-Section "LINT" ""
         & .\scripts\lint.ps1
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
-        Show-Result "✅ Linting passed!" "Green"
+        Show-Result "OK: Linting passed!" "Green"
     }
 }
 
 Write-Host ""
-Write-Host "💡 Tips:" -ForegroundColor Yellow
-Write-Host "   & .\scripts\test.ps1 -Pattern 'keys'    # Filter tests"
-Write-Host "   & .\scripts\test.ps1 -Coverage          # Show coverage"
-Write-Host "   & .\scripts\lint.ps1 -Fix               # Auto-fix style"
+Write-Host "Tips:" -ForegroundColor Yellow
+Write-Host " & .\scripts\test.ps1 -Pattern 'keys'    # Filter tests"
+Write-Host " & .\scripts\test.ps1 -Coverage          # Show coverage"
+Write-Host " & .\scripts\lint.ps1 -Fix               # Auto-fix style"
 Write-Host ""

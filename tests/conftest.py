@@ -1,4 +1,5 @@
 """Aísla los tests del estado real del usuario en %LOCALAPPDATA%\\tmuxw."""
+
 import pytest
 
 from tmuxw import paths
