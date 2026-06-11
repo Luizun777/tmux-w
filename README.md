@@ -11,7 +11,9 @@ Windows), con emulación VT por panel ([pyte](https://github.com/selectel/pyte))
 > 📖 Especificación completa: **[FUNCIONALIDADES.md](FUNCIONALIDADES.md)**  
 > 👨‍💻 Desarrollo: **[DEVELOPMENT.md](DEVELOPMENT.md)**  
 > 🤝 Contribuir: **[CONTRIBUTING.md](CONTRIBUTING.md)**  
-> 🔧 Automatización: **[AUTOMATION_CHECKLIST.md](AUTOMATION_CHECKLIST.md)**
+> 🔧 Automatización: **[AUTOMATION_CHECKLIST.md](AUTOMATION_CHECKLIST.md)**  
+> 🖱️ Mouse Support: **[MOUSE_SELECTION_GUIDE.md](MOUSE_SELECTION_GUIDE.md)**  
+> 📋 Changelog: **[CHANGELOG.md](CHANGELOG.md)**
 
 ## Requisitos
 
@@ -47,6 +49,28 @@ py -3.12 -m venv .venv
 ```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for details.
+
+## Release Process
+
+To cut a new release:
+
+```powershell
+# Auto-bump version, commit, tag
+& .\scripts\release.ps1 -Version patch
+
+# Then push (GitHub Actions handles the rest)
+git push origin main
+git push origin v*
+```
+
+**What happens automatically:**
+- ✅ Tests on Python 3.10/3.11/3.12
+- ✅ Lint check (ruff)
+- ✅ Build wheel + sdist
+- ✅ Create GitHub Release
+- ✅ Upload artifacts
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Uso rápido
 
