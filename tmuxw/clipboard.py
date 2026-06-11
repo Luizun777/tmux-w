@@ -15,6 +15,10 @@ _kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
 _kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
 _user32.SetClipboardData.restype = wintypes.HANDLE
 _user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+_user32.GetClipboardData.restype = wintypes.HANDLE
+_user32.GetClipboardData.argtypes = [wintypes.UINT]
+_kernel32.GlobalSize.restype = ctypes.c_size_t
+_kernel32.GlobalSize.argtypes = [wintypes.HGLOBAL]
 
 
 def set_clipboard_text(text: str) -> bool:
@@ -35,5 +39,31 @@ def set_clipboard_text(text: str) -> bool:
         if not _user32.SetClipboardData(CF_UNICODETEXT, handle):
             return False
         return True
+    finally:
+        _user32.CloseClipboard()
+
+
+def get_clipboard_text() -> str | None:
+    """Lee texto (CF_UNICODETEXT) del portapapeles de Windows. Devuelve None si vacío."""
+    if not _user32.OpenClipboard(None):
+        return None
+    try:
+        handle = _user32.GetClipboardData(CF_UNICODETEXT)
+        if not handle:
+            return None
+        size = _kernel32.GlobalSize(handle)
+        if size <= 0:
+            return None
+        ptr = _kernel32.GlobalLock(handle)
+        if not ptr:
+            return None
+        try:
+            data = ctypes.string_at(ptr, size)
+            text = data.decode("utf-16-le").rstrip("\x00")
+            return text
+        finally:
+            _kernel32.GlobalUnlock(handle)
+    except Exception:
+        return None
     finally:
         _user32.CloseClipboard()

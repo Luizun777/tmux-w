@@ -159,6 +159,9 @@ def render_frame(session, client, state) -> str:
                     cursor = (rect.x + cc[0], rect.y + cc[1], True)
                 continue
             _blit_pane(grid, rect, pane)
+            # Render mouse text selection if active
+            if state.mode == "mouse_select" and pane is state.mouse_drag_pane and state.mouse_selection:
+                _blit_mouse_selection(grid, rect, state.mouse_selection)
             if pane is window.active and cursor is None:
                 with pane.lock:
                     cx, cy = pane.screen.cursor.x, pane.screen.cursor.y
@@ -190,6 +193,9 @@ def render_frame(session, client, state) -> str:
         cursor = None
     elif state.chooser is not None:
         _blit_chooser(grid, state)
+        cursor = None
+    elif state.context_menu is not None:
+        _blit_context_menu(grid, state)
         cursor = None
     elif state.clock:
         _blit_clock(grid, session)
@@ -372,3 +378,34 @@ def _blit_clock(grid: Grid, session) -> None:
         for x in range(grid.w):
             grid.put(x, y, " ", "")
     _blit_big_text(grid, Rect(0, 0, grid.w, grid.h), time.strftime("%H:%M"), "1;32")
+
+
+def _blit_mouse_selection(grid: Grid, rect, selection: tuple) -> None:
+    """Highlight mouse selection with inverse video."""
+    (start_y, start_x), (end_y, end_x) = selection
+    if start_y > end_y or (start_y == end_y and start_x > end_x):
+        (start_y, start_x), (end_y, end_x) = (end_y, end_x), (start_y, start_x)
+    for y in range(max(0, start_y), min(rect.h, end_y + 1)):
+        for x in range(rect.w):
+            s = start_x if y == start_y else 0
+            e = end_x if y == end_y else rect.w - 1
+            if s <= x <= e:
+                sgr = grid.sgrs[rect.y + y][rect.x + x]
+                grid.sgrs[rect.y + y][rect.x + x] = (sgr + ";" if sgr else "") + "7"
+
+
+def _blit_context_menu(grid: Grid, state) -> None:
+    """Render right-click context menu overlay."""
+    for y in range(grid.h):
+        for x in range(grid.w):
+            grid.put(x, y, " ", "")
+    menu = state.context_menu
+    options = menu.get("options", [])
+    title = "Opciones"
+    menu_width = max(len(title), max((len(opt) for opt in options), default=0)) + 4
+    menu_x = max(0, min(grid.w - menu_width, menu.get("x", 0)))
+    menu_y = max(0, min(grid.h - len(options) - 3, menu.get("y", 0)))
+    grid.put_text(menu_x + 1, menu_y, title, "1;33")
+    for i, opt in enumerate(options):
+        sgr = "7" if i == menu["selected"] else ""
+        grid.put_text(menu_x + 2, menu_y + i + 2, opt[:menu_width - 2], sgr)

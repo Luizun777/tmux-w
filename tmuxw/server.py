@@ -25,7 +25,7 @@ class ClientState:
     """Estado de UI por cliente: modo, prompt, overlays, copy-mode."""
 
     def __init__(self):
-        self.mode = "normal"  # normal|prefix|prompt|confirm|copy|choose|page|clock|displayp
+        self.mode = "normal"  # normal|prefix|prompt|confirm|copy|choose|page|clock|displayp|context_menu|mouse_select
         self.prefix_repeat = False  # prefijo activo por un binding repetible (bind -r)
         self.prefix_until = 0.0  # fin del estado de repetición
         self.drag = None  # arrastre de borde: {"win": Window, "node": Split}
@@ -48,6 +48,11 @@ class ClientState:
         self.message_until = 0.0
         self.display_panes_until = 0.0
         self.clock = False
+        # Mouse selection (drag text, right-click menu)
+        self.mouse_drag_start: tuple[int, int] | None = None  # (pane_x, pane_y)
+        self.mouse_drag_pane = None  # Pane being dragged in
+        self.mouse_selection: tuple[tuple[int, int], tuple[int, int]] | None = None  # (start, end) in pane coords
+        self.context_menu = None  # {"pane": Pane, "x": x, "y": y, "options": [...], "selected": 0}
 
     def reset_overlays(self):
         self.mode = "normal"
@@ -58,6 +63,10 @@ class ClientState:
         self.page_lines = None
         self.clock = False
         self.confirm_cmd = None
+        self.mouse_drag_start = None
+        self.mouse_drag_pane = None
+        self.mouse_selection = None
+        self.context_menu = None
 
 
 class Client:
@@ -303,6 +312,12 @@ class Server:
                     i = int(ks)
                     if i < len(ordered):
                         win.set_active(ordered[i])
+            elif st.mode == "context_menu":
+                self._context_menu_key(client, st, ks)
+            elif st.mode == "mouse_select":
+                if ks == "Escape":
+                    st.mode = "normal"
+                    st.mouse_selection = None
             elif st.mode == "prefix":
                 repeating = st.prefix_repeat and time.time() <= st.prefix_until
                 was_repeat = st.prefix_repeat
@@ -405,8 +420,18 @@ class Server:
 
         if etype == "down":
             st.drag = None
+            st.mouse_drag_start = None
+            st.mouse_drag_pane = None
             if target is not None:
                 win.set_active(target)
+                if btn == "left":
+                    # Prepare for text drag selection
+                    st.mouse_drag_pane = target
+                    st.mouse_drag_start = (x - rects[target].x, y - rects[target].y)
+                    st.mode = "mouse_select"
+                elif btn == "right":
+                    # Right-click context menu
+                    self._show_context_menu(client, target, x - rects[target].x, y - rects[target].y)
                 self.relayout(session)
             elif btn == "left" and not win.zoomed:
                 node = win.layout.split_at(x, y, w, body_h)
@@ -414,6 +439,31 @@ class Server:
                     st.drag = {"win": win, "node": node}
                     if win.layout.drag_divider(node, x, y, w, body_h):
                         self.relayout(session)
+        elif etype == "drag":
+            # Handle text drag selection
+            if st.mouse_drag_pane is not None and btn == "left":
+                pane_rect = rects.get(st.mouse_drag_pane)
+                if pane_rect:
+                    pane_x = x - pane_rect.x
+                    pane_y = y - pane_rect.y
+                    if st.mouse_drag_start:
+                        start_x, start_y = st.mouse_drag_start
+                        st.mouse_selection = ((start_y, start_x), (pane_y, pane_x))
+        elif etype == "up":
+            st.drag = None
+            # Finish text drag selection - copy to clipboard
+            if st.mouse_drag_pane is not None and st.mouse_selection is not None and btn == "left":
+                selection_text = self._get_pane_selection_text(st.mouse_drag_pane, st.mouse_selection)
+                if selection_text:
+                    from .clipboard import set_clipboard_text
+                    set_clipboard_text(selection_text)
+                    st.message = "[texto copiado]"
+                    st.message_until = time.time() + 0.5
+            st.mouse_drag_start = None
+            st.mouse_drag_pane = None
+            st.mouse_selection = None
+            st.mode = "normal"
+            self.dirty.set()
         elif etype == "wheel" and btn == "wheel-up" and target is not None:
             # rueda arriba sobre un panel: copy-mode con scroll (como tmux)
             from .copymode import CopyMode
@@ -422,12 +472,100 @@ class Server:
             st.mode = "copy"
             self.relayout(session)
 
+    def _show_context_menu(self, client: Client, pane, pane_x: int, pane_y: int) -> None:
+        """Show right-click context menu."""
+        st = client.state
+        from .clipboard import get_clipboard_text
+        options = []
+        if st.mouse_selection:
+            options.append("copy")
+        if get_clipboard_text():
+            options.append("paste")
+        options.append("kill-pane")
+        if options:
+            st.context_menu = {
+                "pane": pane,
+                "x": pane_x,
+                "y": pane_y,
+                "options": options,
+                "selected": 0,
+            }
+            st.mode = "context_menu"
+
+    def _context_menu_key(self, client: Client, st: ClientState, ks: str) -> None:
+        """Handle key in context menu mode."""
+        menu = st.context_menu
+        if not menu:
+            st.mode = "normal"
+            return
+        if ks in ("Escape", "q"):
+            st.mode = "normal"
+            st.context_menu = None
+        elif ks in ("Up", "k"):
+            menu["selected"] = max(0, menu["selected"] - 1)
+        elif ks in ("Down", "j"):
+            menu["selected"] = min(len(menu["options"]) - 1, menu["selected"] + 1)
+        elif ks in ("Enter", " "):
+            option = menu["options"][menu["selected"]]
+            st.mode = "normal"
+            st.context_menu = None
+            pane = menu["pane"]
+            if option == "copy":
+                if st.mouse_selection:
+                    text = self._get_pane_selection_text(pane, st.mouse_selection)
+                    if text:
+                        from .clipboard import set_clipboard_text
+                        set_clipboard_text(text)
+                        st.message = "[texto copiado]"
+                        st.message_until = time.time() + 0.5
+            elif option == "paste":
+                from .clipboard import get_clipboard_text
+                text = get_clipboard_text()
+                if text:
+                    pane.write(text)
+                    st.message = "[pegado]"
+                    st.message_until = time.time() + 0.5
+            elif option == "kill-pane":
+                # Kill the pane
+                session = self.sessions.get(client.session_name)
+                if session:
+                    self.close_pane(pane, kill_process=True)
+                    st.message = "[panel cerrado]"
+                    st.message_until = time.time() + 0.5
+
+    def _get_pane_selection_text(self, pane, selection: tuple) -> str:
+        """Extract text from pane selection. selection = ((start_y, start_x), (end_y, end_x))."""
+        try:
+            with pane.lock:
+                lines = pane.snapshot_lines()
+            (start_y, start_x), (end_y, end_x) = selection
+            if start_y > end_y or (start_y == end_y and start_x > end_x):
+                (start_y, start_x), (end_y, end_x) = (end_y, end_x), (start_y, start_x)
+            out = []
+            for line_idx in range(max(0, start_y), min(len(lines), end_y + 1)):
+                if line_idx < 0 or line_idx >= len(lines):
+                    continue
+                line = lines[line_idx]
+                text = "".join(ch.data or " " for ch in line).rstrip()
+                s = start_x if line_idx == start_y else 0
+                e = end_x + 1 if line_idx == end_y else len(text)
+                out.append(text[max(0, s) : min(len(text), e)])
+            return "\n".join(out)
+        except Exception:
+            return ""
+
     def _normal_key(self, client: Client, session: Session, win, ks: str) -> None:
         st = client.state
         if ks == session.options.get("prefix") or ks == session.options.get("prefix2"):
             st.mode = "prefix"
         elif ks in self.root_bindings:
             self._run(client, self.root_bindings[ks])
+        elif ks == "C-M-v" and win is not None:
+            # Paste from clipboard: Ctrl+Shift+V
+            from .clipboard import get_clipboard_text
+            text = get_clipboard_text()
+            if text:
+                win.active.write(text)
         elif win is not None:
             win.active.write(keyspec_to_vt(ks))
 
