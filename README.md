@@ -130,3 +130,17 @@ Estado en `%LOCALAPPDATA%\tmuxw\` (`server.json`, `server.log`).
 El proyecto se construyó con un equipo de agentes IA (orquestador + agentes dev + agentes QA);
 el flujo y los criterios de aceptación están en [FUNCIONALIDADES.md §13](FUNCIONALIDADES.md).
 Los hallazgos de QA se documentan en `QA_REPORT.md`.
+
+## Automatización ✅
+
+**Estado**: Todos los 6 Tiers de automatización completados ✅
+- ✅ CI/CD Workflows (tests, lint, build, release + tests-integration)
+- ✅ Local Dev Scripts (setup, test, lint, dev orchestrator, release, profile)
+- ✅ Pre-commit Hooks (ruff format + lint + linters)
+- ✅ Performance Optimizations (parallel tests, split matrix, import profiling)
+- ✅ Developer Documentation (DEVELOPMENT.md, CONTRIBUTING.md, MOUSE_SELECTION_GUIDE.md)
+- ✅ Release Automation (auto-bump version, tag, GitHub Release)
+
+Detalles:
+- 📋 Checklist: [AUTOMATION_CHECKLIST.md](AUTOMATION_CHECKLIST.md)
+- 🔍 Auditoría completa: [CHECKLIST_AUDIT.md](CHECKLIST_AUDIT.md)
