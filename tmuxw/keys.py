@@ -386,6 +386,10 @@ def decode_key_event(key_down: bool, vk: int, ch: str, state: int) -> str | None
         if alt:
             return ("C-M-" + ks[2:]) if ks.startswith("C-") else ("M-" + ks)
         return ks
+    if ctrl and ch.isprintable() and len(ch) == 1:
+        low = ch.lower()
+        if "a" <= low <= "z":
+            return ("C-M-" if alt else "C-") + low
     if alt and ch.isprintable():
         return "M-" + ch
     return ch
