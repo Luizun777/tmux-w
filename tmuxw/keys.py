@@ -448,10 +448,12 @@ def decode_mouse_event(
 
 
 class ConsoleInputReader:
-    """Lee la consola con ReadConsoleInputW: teclas y ratón.
+    """Lee la consola con ReadConsoleInputW: teclas, ratón y resize.
 
-    Genera tuplas ("key", keyspec) y ("mouse", evento). Requiere que el modo
-    de consola tenga ENABLE_MOUSE_INPUT (lo activa RawConsole en el cliente).
+    Genera tuplas ("key", keyspec), ("mouse", evento) y ("resize", None) —
+    el receptor debe consultar el tamaño real de la ventana, porque el evento
+    de consola trae el tamaño del buffer, no del viewport. Requiere que el
+    modo de consola tenga ENABLE_MOUSE_INPUT (lo activa RawConsole).
     """
 
     def __init__(self):
@@ -525,3 +527,5 @@ class ConsoleInputReader:
                     else:
                         self._last_drag = None
                     yield ("mouse", ev)
+                elif rec.EventType == 0x0004:  # WINDOW_BUFFER_SIZE_EVENT
+                    yield ("resize", None)

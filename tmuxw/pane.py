@@ -120,13 +120,19 @@ class Pane:
             self.dead = True
 
     # -------------------------------------------------------------- control
-    def resize(self, cols: int, rows: int) -> None:
+    def resize(self, cols: int, rows: int) -> bool:
+        """Redimensiona pantalla pyte + ConPTY. True si cambió el tamaño."""
         cols, rows = max(2, cols), max(1, rows)
         if (cols, rows) == (self.cols, self.rows):
-            return
+            return False
         self.cols, self.rows = cols, rows
         with self.lock:
             self.screen.resize(rows, cols)
+            # pyte no reposiciona el cursor al achicar: fuera de rango, las
+            # siguientes escrituras irían a filas/columnas fantasma invisibles
+            cur = self.screen.cursor
+            cur.x = min(cur.x, cols - 1)
+            cur.y = min(cur.y, rows - 1)
         if not self.dead:
             try:
                 self.pty.set_size(cols, rows)
@@ -134,6 +140,7 @@ class Pane:
                 pass
         if self.on_dirty:
             self.on_dirty(self)
+        return True
 
     def kill(self) -> None:
         """Termina el árbol de procesos del panel."""

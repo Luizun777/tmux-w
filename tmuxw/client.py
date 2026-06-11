@@ -78,12 +78,14 @@ class RawConsole:
         _k32.SetConsoleMode(
             self.hout, self.old_out.value | ENABLE_VT_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN
         )
-        sys.stdout.write("\x1b[?1049h\x1b[2J\x1b[H")
+        # ?7l: sin autowrap — un frame más ancho que la consola (transición de
+        # resize) haría wrap+scroll y descuadraría todo el repintado
+        sys.stdout.write("\x1b[?1049h\x1b[?7l\x1b[2J\x1b[H")
         sys.stdout.flush()
         return self
 
     def __exit__(self, *exc):
-        sys.stdout.write("\x1b[?1049l\x1b[?25h\x1b[0m")
+        sys.stdout.write("\x1b[?1049l\x1b[?7h\x1b[?25h\x1b[0m")
         sys.stdout.flush()
         _k32.SetConsoleMode(self.hin, self.old_in.value)
         _k32.SetConsoleMode(self.hout, self.old_out.value)
@@ -172,6 +174,21 @@ def run_attach(
 
     stop = threading.Event()
     exit_msg = [""]
+    last_size = [(w, h)]
+    size_lock = threading.Lock()
+
+    def send_resize() -> bool:
+        """Notifica el tamaño actual si cambió; False si el socket murió."""
+        cur = console_size()
+        with size_lock:
+            if cur == last_size[0]:
+                return True
+            last_size[0] = cur
+        try:
+            _send(sock, {"t": "resize", "w": cur[0], "h": cur[1]})
+        except OSError:
+            return False
+        return True
 
     def input_loop():
         reader = ConsoleInputReader()
@@ -181,22 +198,19 @@ def run_attach(
                     break
                 if kind == "key":
                     _send(sock, {"t": "key", "k": data})
+                elif kind == "resize":  # inmediato, sin esperar al polling
+                    send_resize()
                 else:  # mouse
                     _send(sock, {"t": "mouse", **data})
         except (OSError, ValueError):
             pass
 
     def resize_loop():
-        last = (w, h)
+        # fallback por polling: cubre cambios que no generan evento de consola
         while not stop.is_set():
             time.sleep(0.2)
-            cur = console_size()
-            if cur != last:
-                last = cur
-                try:
-                    _send(sock, {"t": "resize", "w": cur[0], "h": cur[1]})
-                except OSError:
-                    break
+            if not send_resize():
+                break
 
     rc = 0
     with RawConsole():

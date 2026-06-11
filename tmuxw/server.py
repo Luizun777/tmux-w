@@ -92,6 +92,7 @@ class Client:
         self.alive = True
         self.state = ClientState()
         self.last_frame = None
+        self.needs_clear = False  # mandar \x1b[2J antes del próximo frame
 
     def send(self, obj: dict) -> None:
         if not self.alive:
@@ -240,6 +241,7 @@ class Server:
         client.attached = True
         client.state.reset_overlays()
         client.last_frame = None
+        client.needs_clear = True
         self._resize_session(session)
         client.send({"t": "attached", "session": session.name})
         self.dirty.set()
@@ -261,13 +263,27 @@ class Server:
 
     def relayout(self, session: Session) -> None:
         body_h = session.height - (1 if session.options.get("status") else 0)
+        resized = []
         for win in session.windows.values():
             rects = win.layout.compute(session.width, max(1, body_h))
             for pane, rect in rects.items():
                 if win.zoomed and pane is win.active:
-                    pane.resize(session.width, max(1, body_h))
+                    if pane.resize(session.width, max(1, body_h)):
+                        resized.append(pane)
                 elif not win.zoomed:
-                    pane.resize(rect.w, rect.h)
+                    if pane.resize(rect.w, rect.h):
+                        resized.append(pane)
+        # copy-mode es una vista congelada con el tamaño viejo: si su panel
+        # cambió de tamaño, salir para no pintar contenido descuadrado
+        if resized:
+            for c in self.clients:
+                if not (c.attached and c.alive and c.session_name == session.name):
+                    continue
+                cp = c.state.copy
+                if cp is not None and any(p is cp.pane for p in resized):
+                    c.state.copy = None
+                    if c.state.mode == "copy":
+                        c.state.mode = "normal"
         self.dirty.set()
 
     def relayout_all(self) -> None:
@@ -882,6 +898,7 @@ class Server:
             client.width = int(msg.get("w", client.width))
             client.height = int(msg.get("h", client.height))
             client.last_frame = None
+            client.needs_clear = True  # purgar restos de frames del tamaño viejo
             session = self.sessions.get(client.session_name)
             if session:
                 self._resize_session(session)
@@ -919,8 +936,12 @@ class Server:
                     except Exception:
                         self._log(traceback.format_exc())
                         continue
-                    if frame != client.last_frame:
+                    if frame != client.last_frame or client.needs_clear:
                         client.last_frame = frame
+                        if client.needs_clear:
+                            client.needs_clear = False
+                            # 2J dentro de la actualización sincronizada (?2026)
+                            frame = "\x1b[?2026h\x1b[2J" + frame
                         frames.append((client, frame))
             for client, frame in frames:
                 client.send({"t": "frame", "d": frame})

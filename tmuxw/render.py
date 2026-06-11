@@ -170,7 +170,7 @@ def render_frame(session, client, state) -> str:
             if state.copy is not None and pane is window.active:
                 _blit_copy_mode(grid, rect, state.copy)
                 cc = state.copy.cursor_in_view()
-                if cc:
+                if cc and cc[0] < rect.w and cc[1] < rect.h:
                     cursor = (rect.x + cc[0], rect.y + cc[1], True)
                 continue
             _blit_pane(grid, rect, pane)

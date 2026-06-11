@@ -14,6 +14,7 @@ class CopyMode:
     """
 
     def __init__(self, pane, mode_keys: str = "emacs", scroll_up: int = 0):
+        self.pane = pane  # para detectar resize del panel (el server sale del modo)
         self.lines = pane.snapshot_lines()
         self.cols = pane.cols
         self.rows = pane.rows
