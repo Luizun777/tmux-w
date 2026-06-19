@@ -1,15 +1,57 @@
 """Panel: una pseudoconsola ConPTY (pywinpty) + emulador de terminal (pyte)."""
 
+import itertools
 import os
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import pyte
 from winpty import PTY
 
+from .vtfilter import VtSanitizer
+
 DEFAULT_SHELL = "powershell.exe"
+
+# Tras un resize, la app tarda en repintar al ancho nuevo y suele emitir antes
+# un frame al ancho VIEJO (más ancho). Durante esta ventana desactivamos el
+# autowrap del panel para que ese contenido sobrante no haga wrap+scroll y deje
+# filas residuales que el repintado incremental ya no limpia. Ver Pane.resize.
+RESIZE_SETTLE = 0.5
+
+
+class PaneScreen(pyte.HistoryScreen):
+    """HistoryScreen + SU/SD (CSI S / CSI T), que pyte no implementa."""
+
+    def scroll_up(self, count: int = 1) -> None:
+        count = max(1, count)
+        top, bottom = self.margins or (0, self.lines - 1)
+        for _ in range(count):
+            if top == 0:
+                self.history.top.append(self.buffer[top])
+            for y in range(top, bottom):
+                self.buffer[y] = self.buffer[y + 1]
+            self.buffer.pop(bottom, None)
+        self.dirty.update(range(top, bottom + 1))
+
+    def scroll_down(self, count: int = 1) -> None:
+        count = max(1, count)
+        top, bottom = self.margins or (0, self.lines - 1)
+        for _ in range(count):
+            for y in range(bottom, top, -1):
+                self.buffer[y] = self.buffer[y - 1]
+            self.buffer.pop(top, None)
+        self.dirty.update(range(top, bottom + 1))
+
+
+class PaneStream(pyte.Stream):
+    """Stream de pyte con CSI S/T añadidos a la tabla de despacho."""
+
+    csi = dict(pyte.Stream.csi)
+    csi.update({"S": "scroll_up", "T": "scroll_down"})
+    events = frozenset(itertools.chain(pyte.Stream.events, ["scroll_up", "scroll_down"]))
 
 
 def _which(name: str) -> str | None:
@@ -73,10 +115,10 @@ class Pane:
         self.on_dirty = on_dirty
         self.on_exit = on_exit
         self.lock = threading.RLock()
-        self.screen = pyte.HistoryScreen(
-            self.cols, self.rows, history=max(history, self.rows), ratio=0.5
-        )
-        self.stream = pyte.Stream(self.screen)
+        self.screen = PaneScreen(self.cols, self.rows, history=max(history, self.rows), ratio=0.5)
+        self.stream = PaneStream(self.screen)
+        self._sanitizer = VtSanitizer()
+        self._wrap_resume_at = 0.0  # > now: autowrap desactivado hasta ese instante
         self.pty = PTY(self.cols, self.rows)
         exe, cmdline = _resolve_command(command, default_shell)
         self.command = command or default_shell
@@ -100,7 +142,16 @@ class Pane:
                 if self.pty.iseof() or not self.pty.isalive():
                     break
                 continue
+            data = self._sanitizer.feed(data)
+            if not data:
+                continue
             with self.lock:
+                # pasada la ventana de settle tras un resize, restaura el
+                # autowrap (lo desactivó resize() para no descuadrar el frame
+                # al ancho viejo que la app emite antes de repintar)
+                if self._wrap_resume_at and time.monotonic() >= self._wrap_resume_at:
+                    self.screen.mode.add(pyte.modes.DECAWM)
+                    self._wrap_resume_at = 0.0
                 try:
                     self.stream.feed(data)
                 except Exception:
@@ -133,6 +184,26 @@ class Pane:
             cur = self.screen.cursor
             cur.x = min(cur.x, cols - 1)
             cur.y = min(cur.y, rows - 1)
+            # Tras un resize (p.ej. al dividir la ventana) la app repinta. Las
+            # TUI full-screen como Claude Code posicionan con el cursor y
+            # escriben los espacios como CUF (ESC[<n>C), asumiendo que la
+            # terminal reflowó y las celdas saltadas están en blanco. pyte NO
+            # reflowa: las celdas viejas DENTRO del nuevo ancho sobreviven al
+            # resize y se filtran entre el texto repintado (guiones y restos de
+            # bordes -> "Claude deformado"). Limpiamos la pantalla visible para
+            # que el repintado caiga sobre un lienzo limpio; el scrollback
+            # (history) se conserva. Es seguro para shells: ConPTY reemite toda
+            # la pantalla visible (cada fila con ESC[K) tras el set_size.
+            self.screen.buffer.clear()
+            self.screen.dirty.update(range(rows))
+            # Además, la app suele emitir un primer frame al ancho VIEJO antes
+            # de repintar al nuevo; ese contenido (más ancho que el panel) haría
+            # wrap+scroll en pyte y dejaría filas residuales que el repintado
+            # incremental no borra. Desactivamos el autowrap durante la ventana
+            # de settle; _read_loop lo restaura al expirar. El autowrap normal
+            # (líneas largas de shell) se conserva fuera de esa ventana.
+            self.screen.mode.discard(pyte.modes.DECAWM)
+            self._wrap_resume_at = time.monotonic() + RESIZE_SETTLE
         if not self.dead:
             try:
                 self.pty.set_size(cols, rows)
